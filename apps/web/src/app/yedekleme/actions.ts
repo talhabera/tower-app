@@ -42,8 +42,9 @@ async function resolveInput() {
 export async function enableBackupAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   const session = await requireSession();
   if (!yazabilir(session.email)) return YETKI_YOK;
-  const uuid = String(form.get("uuid") ?? "");
-  const name = String(form.get("name") ?? "");
+  const uuid = String(form.get("uuid") ?? "").trim();
+  const name = String(form.get("name") ?? "").trim();
+  if (!uuid || !name) return { ok: false, message: "Veritabanı bilgisi eksik; sayfayı yenileyip tekrar deneyin." };
   const ports = backupPorts();
   if (!ports.ok) return { ok: false, message: ports.error.message };
   const input = await resolveInput();
@@ -57,6 +58,7 @@ export async function enableBackupAction(_prev: ActionState, form: FormData): Pr
     : { ok: false, message: row.error?.message ?? "Uygulanmadı, tekrar deneyin." };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- useActionState imzası iki parametre ister
 export async function protectAllAction(_prev: ActionState, _form: FormData): Promise<ActionState> {
   const session = await requireSession();
   if (!yazabilir(session.email)) return YETKI_YOK;
@@ -67,7 +69,7 @@ export async function protectAllAction(_prev: ActionState, _form: FormData): Pro
   const list = await listUnprotected();
   if (!list.ok) return { ok: false, message: list.error.message };
 
-  const { outcome, rows } = await protectAll(deps(), ports.value, session.email, list.value, input.value);
+  const { outcome, rows } = await protectAll(deps(), ports.value, session.email, list.value.unprotected, input.value);
   done();
   return outcome.ok
     ? { ok: true, message: `${rows.length} veritabanı işlendi.`, rows }

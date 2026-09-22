@@ -21,18 +21,27 @@ export function backupPorts(): Result<BackupPorts> {
   };
 }
 
-/** Onay ekranı için CANLI (önbelleksiz) korumasız veritabanı listesi. */
-export async function listUnprotected(): Promise<Result<{ uuid: string; name: string }[]>> {
+export type DbRef = { uuid: string; name: string };
+export type UnprotectedList = { unprotected: DbRef[]; unreadable: DbRef[] };
+
+/**
+ * Onay ekranı ve toplu işlem için CANLI (önbelleksiz) liste. Yedekleri okunamayan
+ * veritabanları `unreadable`'a ayrılır ve toplu işlemde İŞLENMEZ.
+ */
+export async function listUnprotected(): Promise<Result<UnprotectedList>> {
   const http = getCoolify();
   if (!http.ok) return http;
   const dbs = await listDatabases(http.value);
   if (!dbs.ok) return dbs;
-  const out: { uuid: string; name: string }[] = [];
+  const unprotected: DbRef[] = [];
+  const unreadable: DbRef[] = [];
   for (const db of dbs.value) {
     const b = await getDatabaseBackups(http.value, db.uuid);
-    if (!b.ok || !hasActiveSchedule(b.value)) out.push({ uuid: db.uuid, name: db.name });
+    const ref = { uuid: db.uuid, name: db.name };
+    if (!b.ok) unreadable.push(ref);
+    else if (!hasActiveSchedule(b.value)) unprotected.push(ref);
   }
-  return { ok: true, value: out };
+  return { ok: true, value: { unprotected, unreadable } };
 }
 
 export async function liveStorages(): Promise<Result<S3Storage[]>> {

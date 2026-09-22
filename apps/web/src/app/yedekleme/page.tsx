@@ -10,11 +10,20 @@ import { isWriter } from "@/server/writers";
 
 export const revalidate = 10;
 
+/** Postgres okunamazsa undefined: yazma düğmeleri gizlenir, salt-okunur pano yine çizilir. */
+async function okunabilirPreset() {
+  try {
+    return await getStore()?.getBackupPreset();
+  } catch {
+    return undefined;
+  }
+}
+
 export default async function Yedekleme() {
   const session = await requireSession();
   const data = await loadDashboard();
   const yazici = isWriter(session.email, process.env.TOWER_WRITER_EMAILS);
-  const preset = yazici ? await getStore()?.getBackupPreset() : undefined;
+  const preset = yazici ? await okunabilirPreset() : undefined;
   const ozet = preset ? `${preset.frequency} · ${preset.keepLocal} yerel / ${preset.keepS3} S3` : "";
 
   if (data.state === "unauthorized") return <TokenGecersizBandi />;

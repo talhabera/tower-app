@@ -15,11 +15,17 @@ export default async function KoruSayfasi() {
   if (!store) return <main className="p-8 text-sm">DATABASE_URL tanımlı değil; yazma kapalı.</main>;
 
   const [preset, storages, list] = await Promise.all([store.getBackupPreset(), liveStorages(), listUnprotected()]);
-  const target = presetTarget(preset, storages.ok ? storages.value : []);
+  // S3 listesi okunamadıysa hatayı göster; preset sayfasına yönlendirmek sorunu gizler.
+  if (!storages.ok) {
+    return <main className="p-8 text-sm text-red-700">S3 hedefleri okunamadı — {storages.error.message}</main>;
+  }
+  const target = presetTarget(preset, storages.value);
   if (!target.ok) redirect("/yedekleme/preset");
   if (!list.ok) return <main className="p-8 text-sm text-red-700">{list.error.message}</main>;
 
-  const hedef = storages.ok ? storages.value.find((s) => s.uuid === target.value.s3StorageUuid)?.name : "";
+  const { unprotected, unreadable } = list.value;
+  const hedef =
+    storages.value.find((s) => s.uuid === target.value.s3StorageUuid)?.name ?? target.value.s3StorageUuid;
   return (
     <main className="space-y-6 p-8">
       <h1 className="text-xl font-semibold">Korumasız veritabanlarını koru</h1>
@@ -28,13 +34,25 @@ export default async function KoruSayfasi() {
         S3&apos;te {target.value.keepS3} yedek → <strong>{hedef}</strong>.
       </p>
       <ul className="text-sm">
-        {list.value.map((d) => (
+        {unprotected.map((d) => (
           <li key={d.uuid} className="border-t border-neutral-100 py-1">
             {d.name}
           </li>
         ))}
       </ul>
-      <KoruFormu adet={list.value.length} />
+      {unreadable.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-amber-800">Yedek durumu okunamadı (işlenmeyecek)</h2>
+          <ul className="text-sm text-neutral-600">
+            {unreadable.map((d) => (
+              <li key={d.uuid} className="border-t border-neutral-100 py-1">
+                {d.name}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <KoruFormu adet={unprotected.length} />
     </main>
   );
 }

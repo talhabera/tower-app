@@ -20,7 +20,16 @@ export default async function PresetSayfasi() {
     );
   }
   const [preset, storages] = await Promise.all([store.getBackupPreset(), liveStorages()]);
-  const usable = storages.ok ? storages.value.filter((s) => s.usable) : [];
+  if (!storages.ok) {
+    return (
+      <main className="p-8">
+        <Kart baslik="Yedek preset'i" tazelik="ulasilamiyor">
+          <p className="text-sm text-red-700">S3 hedefleri okunamadı — {storages.error.message}</p>
+        </Kart>
+      </main>
+    );
+  }
+  const usable = storages.value.filter((s) => s.usable);
   return (
     <main className="space-y-6 p-8">
       <h1 className="text-xl font-semibold">Yedek preset&apos;i</h1>
