@@ -28,7 +28,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: repoRoot,
   },
-  transpilePackages: ["@tower/coolify"],
+  transpilePackages: ["@tower/coolify", "@tower/db"],
 };
 
 export default nextConfig;
