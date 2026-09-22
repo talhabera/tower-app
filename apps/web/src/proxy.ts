@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { appUrl } from "@/server/base-url";
 import { SESSION_COOKIE } from "@/server/session";
 
 /**
@@ -15,7 +16,7 @@ export function proxy(request: NextRequest) {
   if (isPublic) return NextResponse.next();
 
   if (!request.cookies.get(SESSION_COOKIE)) {
-    return NextResponse.redirect(new URL("/api/auth/login", request.url));
+    return NextResponse.redirect(appUrl("/api/auth/login"));
   }
   return NextResponse.next();
 }

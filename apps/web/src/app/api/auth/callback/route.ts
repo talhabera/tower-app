@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     return fail();
   }
 
-  const identity = sessionIdentity(claims, process.env.TOWER_ALLOWED_EMAILS);
+  const identity = sessionIdentity(claims);
   if (!identity) return fail("yetkisiz");
 
   let token: string;

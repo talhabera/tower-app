@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { CompactEncrypt, compactDecrypt } from "jose";
@@ -15,10 +16,12 @@ export type TowerSession = {
   expiresAt: number;
 };
 
+/** Anahtar sırrın TAMAMINDAN SHA-256 ile türetilir (kesme yok). */
 function keyFrom(secret: string): Uint8Array {
-  const bytes = new TextEncoder().encode(secret);
-  if (bytes.length < 32) throw new Error("TOWER_SESSION_SECRET en az 32 bayt olmalı");
-  return bytes.slice(0, 32);
+  if (new TextEncoder().encode(secret).length < 32) {
+    throw new Error("TOWER_SESSION_SECRET en az 32 bayt olmalı");
+  }
+  return new Uint8Array(createHash("sha256").update(secret, "utf8").digest());
 }
 
 export async function sealSession(session: TowerSession, secret: string): Promise<string> {

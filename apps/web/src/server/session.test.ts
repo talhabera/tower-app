@@ -38,4 +38,14 @@ describe("oturum çerezi", () => {
     const token = await sealSession(expired, SECRET);
     expect(await unsealSession(token, SECRET)).toBeNull();
   });
+
+  it("anahtar sırrın tamamından türetilir (ilk 32 bayt aynı, sonrası farklı sırlar birbirini açamaz)", async () => {
+    const base = "a".repeat(32);
+    const token = await sealSession(
+      { sub: "u1", email: "a@example.com", name: "A", expiresAt: Date.now() + 60_000 },
+      `${base}-birinci`,
+    );
+    expect(await unsealSession(token, `${base}-ikinci`)).toBeNull();
+    expect(await unsealSession(token, `${base}-birinci`)).not.toBeNull();
+  });
 });

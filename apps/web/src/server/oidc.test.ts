@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { appUrl, callbackCurrentUrl, parseAllowedEmails, sessionIdentity } from "./oidc";
+import { appUrl, callbackCurrentUrl, sessionIdentity } from "./oidc";
 
 const ORIGINAL_TOWER_BASE_URL = process.env.TOWER_BASE_URL;
 
@@ -36,38 +36,26 @@ describe("appUrl", () => {
 });
 
 describe("sessionIdentity", () => {
-  it("sub boş veya eksikse girişi reddeder", () => {
-    expect(sessionIdentity({}, undefined)).toBeNull();
-    expect(sessionIdentity({ sub: "" }, undefined)).toBeNull();
-    expect(sessionIdentity({ sub: "   " }, undefined)).toBeNull();
-    expect(sessionIdentity({ sub: 42 }, undefined)).toBeNull();
+  it("sub boş/eksikse reddeder", () => {
+    expect(sessionIdentity({})).toBeNull();
+    expect(sessionIdentity({ sub: "" })).toBeNull();
+    expect(sessionIdentity({ sub: "   " })).toBeNull();
+    expect(sessionIdentity({ sub: 42 })).toBeNull();
   });
 
-  it("allowlist tanımsızsa her NexAuth hesabına izin verir", () => {
-    expect(sessionIdentity({ sub: "u1", email: "a@example.com", name: "A" }, undefined)).toEqual({
+  it("claim'lerden kimlik üretir", () => {
+    expect(sessionIdentity({ sub: "u1", email: "a@example.com", name: "A" })).toEqual({
       sub: "u1",
       email: "a@example.com",
       name: "A",
     });
-    expect(sessionIdentity({ sub: "u1" }, " , ")).not.toBeNull();
   });
 
-  it("allowlist tanımlıysa yalnızca listedeki e-postalar girer (büyük/küçük harf duyarsız)", () => {
-    const allow = "ops@example.com, Admin@Example.com";
-    expect(sessionIdentity({ sub: "u1", email: "admin@example.com" }, allow)).not.toBeNull();
-    expect(sessionIdentity({ sub: "u2", email: "other@example.com" }, allow)).toBeNull();
-    expect(sessionIdentity({ sub: "u3" }, allow)).toBeNull();
-  });
-
-  it("allowlist varken doğrulanmamış e-posta reddedilir", () => {
-    expect(
-      sessionIdentity({ sub: "u1", email: "ops@example.com", email_verified: false }, "ops@example.com"),
-    ).toBeNull();
-  });
-
-  it("parseAllowedEmails boş listeyi null sayar", () => {
-    expect(parseAllowedEmails(undefined)).toBeNull();
-    expect(parseAllowedEmails("")).toBeNull();
-    expect(parseAllowedEmails("A@x.com,b@x.com")).toEqual(new Set(["a@x.com", "b@x.com"]));
+  it("doğrulanmamış e-postayı oturuma taşımaz (yazıcı kontrolü boş e-postayı reddeder)", () => {
+    expect(sessionIdentity({ sub: "u1", email: "ops@example.com", email_verified: false })).toEqual({
+      sub: "u1",
+      email: "",
+      name: "",
+    });
   });
 });
