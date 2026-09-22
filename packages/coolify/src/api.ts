@@ -27,15 +27,17 @@ function map<T>(result: Result<unknown>, fn: (rows: Raw[]) => T[]): Result<T[]> 
 export async function listServers(http: CoolifyHttp): Promise<Result<FleetServer[]>> {
   const r = await http.get<unknown>("/servers");
   return map(r, (list) =>
-    list.map((s) => {
-      const settings = (s.settings ?? {}) as Raw;
-      return {
-        uuid: str(s.uuid),
-        name: str(s.name),
-        reachable: bool(settings.is_reachable),
-        usable: bool(settings.is_usable),
-      };
-    }),
+    list
+      .filter((s): s is Raw => s != null && typeof s === "object")
+      .map((s) => {
+        const settings = (s.settings ?? {}) as Raw;
+        return {
+          uuid: str(s.uuid),
+          name: str(s.name),
+          reachable: bool(settings.is_reachable),
+          usable: bool(settings.is_usable),
+        };
+      }),
   );
 }
 
@@ -43,7 +45,11 @@ export async function listProjects(
   http: CoolifyHttp,
 ): Promise<Result<Array<{ uuid: string; name: string }>>> {
   const r = await http.get<unknown>("/projects");
-  return map(r, (list) => list.map((p) => ({ uuid: str(p.uuid), name: str(p.name) })));
+  return map(r, (list) =>
+    list
+      .filter((p): p is Raw => p != null && typeof p === "object")
+      .map((p) => ({ uuid: str(p.uuid), name: str(p.name) })),
+  );
 }
 
 export async function listEnvironments(
@@ -51,7 +57,11 @@ export async function listEnvironments(
   projectUuid: string,
 ): Promise<Result<Array<{ uuid: string; name: string }>>> {
   const r = await http.get<unknown>(`/projects/${projectUuid}/environments`);
-  return map(r, (list) => list.map((e) => ({ uuid: str(e.uuid), name: str(e.name) })));
+  return map(r, (list) =>
+    list
+      .filter((e): e is Raw => e != null && typeof e === "object")
+      .map((e) => ({ uuid: str(e.uuid), name: str(e.name) })),
+  );
 }
 
 export async function getEnvironment(
@@ -87,12 +97,14 @@ export async function getEnvironment(
 export async function listDatabases(http: CoolifyHttp): Promise<Result<DatabaseSummary[]>> {
   const r = await http.get<unknown>("/databases");
   return map(r, (list) =>
-    list.map((d) => ({
-      uuid: str(d.uuid),
-      name: str(d.name),
-      status: parseStatus(str(d.status)),
-      backups: [],
-    })),
+    list
+      .filter((d): d is Raw => d != null && typeof d === "object")
+      .map((d) => ({
+        uuid: str(d.uuid),
+        name: str(d.name),
+        status: parseStatus(str(d.status)),
+        backups: [],
+      })),
   );
 }
 
@@ -102,25 +114,29 @@ export async function getDatabaseBackups(
 ): Promise<Result<DatabaseBackup[]>> {
   const r = await http.get<unknown>(`/databases/${databaseUuid}/backups`);
   return map(r, (list) =>
-    list.map((b) => ({
-      uuid: str(b.uuid),
-      enabled: bool(b.enabled),
-      frequency: str(b.frequency),
-      saveToS3: bool(b.save_s3),
-    })),
+    list
+      .filter((b): b is Raw => b != null && typeof b === "object")
+      .map((b) => ({
+        uuid: str(b.uuid),
+        enabled: bool(b.enabled),
+        frequency: str(b.frequency),
+        saveToS3: bool(b.save_s3),
+      })),
   );
 }
 
 export async function listS3Storages(http: CoolifyHttp): Promise<Result<S3Storage[]>> {
   const r = await http.get<unknown>("/s3-storages");
   return map(r, (list) =>
-    list.map((s) => ({
-      uuid: str(s.uuid),
-      name: str(s.name),
-      bucket: str(s.bucket),
-      endpoint: str(s.endpoint),
-      usable: bool(s.is_usable),
-    })),
+    list
+      .filter((s): s is Raw => s != null && typeof s === "object")
+      .map((s) => ({
+        uuid: str(s.uuid),
+        name: str(s.name),
+        bucket: str(s.bucket),
+        endpoint: str(s.endpoint),
+        usable: bool(s.is_usable),
+      })),
   );
 }
 
@@ -155,11 +171,13 @@ export async function getApplication(
 export async function listDeployments(http: CoolifyHttp): Promise<Result<DeploymentSummary[]>> {
   const r = await http.get<unknown>("/deployments");
   return map(r, (list) =>
-    list.map((d) => ({
-      uuid: str(d.deployment_uuid, str(d.uuid)),
-      applicationName: str(d.application_name),
-      status: str(d.status),
-      createdAt: str(d.created_at),
-    })),
+    list
+      .filter((d): d is Raw => d != null && typeof d === "object")
+      .map((d) => ({
+        uuid: str(d.deployment_uuid, str(d.uuid)),
+        applicationName: str(d.application_name),
+        status: str(d.status),
+        createdAt: str(d.created_at),
+      })),
   );
 }
