@@ -5,3 +5,6 @@ export type { CoolifyConfig } from "./config";
 export { readConfig } from "./config";
 export type { CoolifyHttp } from "./http";
 export { createClient } from "./http";
+export * from "./types";
+export type { ResourceHealth, ResourceState, ResourceStatus } from "./status";
+export { parseStatus } from "./status";
