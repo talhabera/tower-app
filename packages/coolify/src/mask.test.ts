@@ -33,4 +33,31 @@ describe("maskSecrets", () => {
     const text = "2026-09-20 build başarılı, 12 kaynak tarandı";
     expect(maskSecrets(text)).toBe(text);
   });
+
+  it("lowercase anahtarları maskeler", () => {
+    expect(maskSecrets("password=hunter2")).toBe("password=***");
+    expect(maskSecrets("api_key=abcd1234")).toBe("api_key=***");
+    expect(maskSecrets("token=abc")).toBe("token=***");
+  });
+
+  it("lowercase Bearer token'ı maskeler", () => {
+    expect(maskSecrets("authorization: bearer abcdef123456")).toBe(
+      "authorization: bearer ***",
+    );
+  });
+
+  it("uppercase BEARER token'ı maskeler", () => {
+    expect(maskSecrets("Authorization: BEARER aaaabbbbccccddddeeeeffff")).toBe(
+      "Authorization: BEARER ***",
+    );
+  });
+
+  it("anahtar adının ortasında gizli bilgi anahtarını maskeler", () => {
+    expect(maskSecrets("PASSWORD_HASH=x123y456z789a012b345c678d901e234")).toBe(
+      "PASSWORD_HASH=***",
+    );
+    expect(maskSecrets("DB_PASSWORD_FILE=/path/to/secret")).toBe(
+      "DB_PASSWORD_FILE=***",
+    );
+  });
 });
