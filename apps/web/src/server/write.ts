@@ -5,7 +5,11 @@ import { isWriter } from "./writers";
 
 export type WriteErrorKind = CoolifyErrorKind | "forbidden" | "db" | "needs_s3" | "partial";
 export type WriteError = { kind: WriteErrorKind; message: string };
-export type StepResult<T> = { ok: true; value: T } | { ok: false; error: WriteError };
+export type StepResult<T> =
+  | { ok: true; value: T }
+  // `detail`: başarısız adımın kısmi durumu (örn. protect_all'da hangi veritabanları
+  // başarısız oldu) — verilirse `result: null` yerine denetim satırına redaksiyonla yazılır.
+  | { ok: false; error: WriteError; detail?: unknown };
 export type WriteOutcome<T> =
   | { ok: true; value: T; auditId: string }
   | { ok: false; error: WriteError; auditId?: string };
@@ -65,7 +69,7 @@ export async function performWrite<T>(
       auditId,
       result.ok
         ? { status: "ok", errorKind: null, result: redactJson(result.value) }
-        : { status: "failed", errorKind: result.error.kind, result: null },
+        : { status: "failed", errorKind: result.error.kind, result: result.detail !== undefined ? redactJson(result.detail) : null },
     );
   } catch {
     console.error(`[tower] denetim satırı kapatılamadı: ${auditId}`);

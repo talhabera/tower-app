@@ -10,7 +10,15 @@ const RENK = { ok: "text-emerald-700", failed: "text-red-700", pending: "text-ne
 
 export default async function Denetim() {
   await requireSession();
-  const store = getStore();
+  let store;
+  try {
+    store = getStore();
+  } catch (e) {
+    // DATABASE_URL bozuksa postgres.js senkron olarak fırlatabilir; ham mesaj
+    // istemciye gitmez, yalnızca sunucu loguna düşer (DATABASE_URL'in kendisi loglanmaz).
+    console.error("[tower] getStore patladı:", e instanceof Error ? e.message : e);
+    store = null;
+  }
   if (!store) {
     return (
       <main className="p-8">
@@ -24,11 +32,13 @@ export default async function Denetim() {
   try {
     rows = await store.listAudit(200);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Bilinmeyen hata";
+    // Ham Postgres hatası host/kullanıcı adı sızdırabilir; kullanıcıya genel mesaj,
+    // ayrıntı yalnızca sunucu logunda.
+    console.error("[tower] denetim kaydı okunamadı:", e instanceof Error ? e.message : e);
     return (
       <main className="p-8">
         <Kart baslik="Denetim kaydı" tazelik="ulasilamiyor">
-          <p className="text-sm">Denetim kaydı okunamadı: {msg}</p>
+          <p className="text-sm">Denetim kaydı şu anda okunamıyor.</p>
         </Kart>
       </main>
     );

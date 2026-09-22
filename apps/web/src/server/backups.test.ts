@@ -105,7 +105,12 @@ describe("protectAll", () => {
     const { outcome, rows } = await protectAll({ store: s, writers }, p, actor, dbs, input);
     expect(rows.map((r) => r.status)).toEqual(["ok", "failed", "ok"]);
     expect(outcome).toMatchObject({ ok: false, error: { kind: "partial" } });
-    expect(finished.at(-1)).toMatchObject({ id: "a1", status: "failed", errorKind: "partial" });
+    expect(finished.at(-1)).toMatchObject({
+      id: "a1",
+      status: "failed",
+      errorKind: "partial",
+      result: { failedDatabases: [{ uuid: "db-2", name: "b" }] },
+    });
   });
 
   it("yazıcı değilse hiçbir şey denemez", async () => {

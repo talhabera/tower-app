@@ -60,10 +60,16 @@ export async function protectAll(
       for (const db of dbs) {
         rows.push(await enableBackup(deps, ports, actorEmail, db, input, parentId));
       }
-      const failed = rows.filter((r) => r.status === "failed").length;
-      return failed === 0
+      const failedDbs = rows.filter((r) => r.status === "failed").map((r) => ({ uuid: r.uuid, name: r.name }));
+      return failedDbs.length === 0
         ? { ok: true as const, value: rows }
-        : { ok: false as const, error: { kind: "partial" as const, message: `${failed}/${rows.length} veritabanı korunamadı.` } };
+        : {
+            ok: false as const,
+            error: { kind: "partial" as const, message: `${failedDbs.length}/${rows.length} veritabanı korunamadı.` },
+            // Ebeveyn satır hangi veritabanlarının başarısız olduğunu adıyla saklar
+            // (result: null yerine) — /denetim kısmi hatada kör kalmasın.
+            detail: { failedDatabases: failedDbs },
+          };
     },
   );
   return { outcome, rows };

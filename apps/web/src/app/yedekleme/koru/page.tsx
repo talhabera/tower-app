@@ -14,7 +14,13 @@ export default async function KoruSayfasi() {
   const store = getStore();
   if (!store) return <main className="p-8 text-sm">DATABASE_URL tanımlı değil; yazma kapalı.</main>;
 
-  const [preset, storages, list] = await Promise.all([store.getBackupPreset(), liveStorages(), listUnprotected()]);
+  let preset;
+  try {
+    preset = await store.getBackupPreset();
+  } catch {
+    return <main className="p-8 text-sm text-red-700">Tower veritabanına ulaşılamadı; yazma yapılmadı.</main>;
+  }
+  const [storages, list] = await Promise.all([liveStorages(), listUnprotected()]);
   // S3 listesi okunamadıysa hatayı göster; preset sayfasına yönlendirmek sorunu gizler.
   if (!storages.ok) {
     return <main className="p-8 text-sm text-red-700">S3 hedefleri okunamadı — {storages.error.message}</main>;

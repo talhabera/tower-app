@@ -19,7 +19,19 @@ export default async function PresetSayfasi() {
       </main>
     );
   }
-  const [preset, storages] = await Promise.all([store.getBackupPreset(), liveStorages()]);
+  let preset;
+  try {
+    preset = await store.getBackupPreset();
+  } catch {
+    return (
+      <main className="p-8">
+        <Kart baslik="Yedek preset'i" tazelik="ulasilamiyor">
+          <p className="text-sm text-red-700">Tower veritabanına ulaşılamadı; yazma yapılmadı.</p>
+        </Kart>
+      </main>
+    );
+  }
+  const storages = await liveStorages();
   if (!storages.ok) {
     return (
       <main className="p-8">

@@ -60,7 +60,9 @@ export interface TowerStore {
 const PRESET_ID = 1;
 
 export function createStore(url: string): TowerStore {
-  const sql = postgres(url, { max: 5 });
+  // connect_timeout: sürücü varsayılanı 30 sn; kesik bağlantıda okuma sayfaları
+  // ve yazma eylemleri bu kadar süre asılı kalmasın diye 5 sn'ye düşürüldü.
+  const sql = postgres(url, { max: 5, connect_timeout: 5 });
   const db = drizzle(sql);
 
   return {

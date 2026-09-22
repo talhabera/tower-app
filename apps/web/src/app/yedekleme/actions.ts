@@ -14,6 +14,8 @@ export type ActionState = { ok: boolean; message: string; rows?: BackupRow[] } |
 
 const YETKI_YOK: ActionState = { ok: false, message: "Bu işlem için yazma yetkiniz yok." };
 const DB_YOK = "DATABASE_URL tanımlı değil; yazma kapalı.";
+const DB_ULASILAMADI = "Tower veritabanına ulaşılamadı; yazma yapılmadı.";
+const SONUC_BELIRSIZ = "Sonuç belirsiz; tekrar denemeden önce /yedekleme'yi kontrol edin.";
 
 function yazabilir(email: string): boolean {
   return isWriter(email, process.env.TOWER_WRITER_EMAILS);
@@ -29,11 +31,17 @@ function done() {
   revalidatePath("/denetim");
 }
 
-/** Preset + canlı S3 listesinden Coolify girdisi; store yoksa db hatası. */
+/** Preset + canlı S3 listesinden Coolify girdisi; store yoksa/erişilemezse db hatası. */
 async function resolveInput() {
   const store = getStore();
   if (!store) return { ok: false as const, message: DB_YOK };
-  const [preset, storages] = await Promise.all([store.getBackupPreset(), liveStorages()]);
+  let preset;
+  try {
+    preset = await store.getBackupPreset();
+  } catch {
+    return { ok: false as const, message: DB_ULASILAMADI };
+  }
+  const storages = await liveStorages();
   if (!storages.ok) return { ok: false as const, message: storages.error.message };
   const target = presetTarget(preset, storages.value);
   return target.ok ? { ok: true as const, value: target.value } : { ok: false as const, message: target.error.message };
@@ -53,9 +61,11 @@ export async function enableBackupAction(_prev: ActionState, form: FormData): Pr
   const row = await enableBackup(deps(), ports.value, session.email, { uuid, name }, input.value);
   done();
   if (row.status === "skipped") return { ok: true, message: "Zaten etkin bir yedek programı var." };
-  return row.status === "ok"
-    ? { ok: true, message: "Yedek programı kuruldu." }
-    : { ok: false, message: row.error?.message ?? "Uygulanmadı, tekrar deneyin." };
+  if (row.status === "ok") return { ok: true, message: "Yedek programı kuruldu." };
+  // unreachable: istek Coolify'a ulaşmış olabilir (zaman aşımı) — tekrar denemeden
+  // önce canlı durumu /yedekleme'de kontrol etmesi gerektiği söylenir.
+  if (row.error?.kind === "unreachable") return { ok: false, message: SONUC_BELIRSIZ };
+  return { ok: false, message: row.error?.message ?? "Uygulanmadı, tekrar deneyin." };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- useActionState imzası iki parametre ister
