@@ -69,7 +69,7 @@ packages/
   yazma metoduna erişemez.
 - HTTP istemcisine `post` ve `patch` eklenir; bunlar yalnızca `write` girişinden
   kullanılabilir (`createWriteClient`). Kök girişteki `CoolifyHttp` tipi `get`-only kalır.
-- Metodlar: `createBackupSchedule`, `updateBackupSchedule`. Hepsi `Result<T, CoolifyError>` döner, throw etmez.
+- Metod: `createBackupSchedule`. Mevcut programı güncelleme yok (preset yalnızca yeni programlara uygulanır). Hepsi `Result<T, CoolifyError>` döner, throw etmez.
 - Hata mesajları ve payload'lar mevcut `maskSecrets` / `redactJson` ile maskelenir.
 - Zaman aşımı 20 sn, yeniden deneme yok.
 
@@ -97,8 +97,7 @@ Tüm yazmaların tek geçidi. Sırası sabittir:
 audit_log
   id           uuid pk
   actor_email  text not null
-  action       text not null      -- 'backup.create' | 'backup.update'
-                                  -- | 'backup.protect_all' | 'preset.update'
+  action       text not null      -- 'backup.create' | 'backup.protect_all' | 'preset.update'
   target       text               -- coolify uuid (veritabanı)
   payload      jsonb not null     -- sırlar maskelenmiş istek
   status       text not null      -- 'pending' | 'ok' | 'failed'
@@ -111,7 +110,6 @@ audit_log
 backup_preset   -- tek satır
   id               int pk (sabit 1)
   frequency        text not null default '0 3 * * *'
-  timezone         text not null default 'Europe/Istanbul'
   keep_local       int  not null default 7
   keep_s3          int  not null default 30
   s3_storage_uuid  text           -- null ise yedek açılamaz (needs_s3)
@@ -144,7 +142,8 @@ Tower S3 kimlik bilgilerini hiç okumaz ve saklamaz; preset yalnızca storage uu
 
 ### Preset düzenle
 
-1. Form: sıklık (cron), saat dilimi, keep_local, keep_s3, hedef S3.
+1. Form: sıklık (cron), keep_local, keep_s3, hedef S3. Coolify API'sinde saat dilimi alanı
+   yoktur; cron Coolify sunucusunun saat diliminde çalışır (UI bunu not olarak gösterir).
 2. Hedef S3 listesi canlı `listS3Storages`'tan gelir; yalnızca `usable=true` olanlar seçilebilir.
 3. Kayıt `preset.update` denetim satırı üretir (Coolify çağrısı yok; `performWrite`'ın
    `fn`'i yalnızca db yazar).
