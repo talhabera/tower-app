@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import {
   getApplication,
@@ -6,6 +7,7 @@ import {
   listApplicationEnvKeys,
   listApplicationScheduledTasks,
   listApplicationStorages,
+  type Result,
 } from "@tower/coolify";
 import { DurumRozeti } from "@/components/durum-rozeti";
 import { Kart } from "@/components/kart";
@@ -20,6 +22,35 @@ function Satir({ etiket, deger }: { etiket: string; deger: string }) {
       <span className="w-40 shrink-0 text-neutral-500">{etiket}</span>
       <span className="min-w-0 break-all">{deger || "—"}</span>
     </div>
+  );
+}
+
+/**
+ * Bağımsız okunan bir listeyi (depolar, görevler, dağıtımlar, ...) sarar.
+ * Okuma başarısızsa yalnızca bu bölüm "okunamadı" gösterir — sayfanın geri
+ * kalanı etkilenmez (ruling 3: her bölüm bağımsız bozulur).
+ */
+function ResultSection<T>({
+  baslik,
+  result,
+  bos,
+  children,
+}: {
+  baslik: string;
+  result: Result<T[]>;
+  bos: string;
+  children: (items: T[]) => ReactNode;
+}) {
+  return (
+    <Kart baslik={baslik} tazelik={result.ok ? "taze" : "ulasilamiyor"}>
+      {!result.ok ? (
+        <p className="text-sm text-neutral-500">okunamadı</p>
+      ) : result.value.length === 0 ? (
+        <p className="text-sm text-neutral-500">{bos}</p>
+      ) : (
+        children(result.value)
+      )}
+    </Kart>
   );
 }
 
@@ -88,30 +119,26 @@ export default async function KaynakDetay({ params }: { params: Promise<{ uuid: 
         )}
       </Kart>
 
-      <Kart baslik="Kalıcı depolar" tazelik={storages.ok ? "taze" : "ulasilamiyor"}>
-        {!storages.ok ? (
-          <p className="text-sm text-neutral-500">okunamadı</p>
-        ) : storages.value.length === 0 ? (
-          <p className="text-sm text-neutral-500">Tanımlı kalıcı depo yok.</p>
-        ) : (
+      <ResultSection baslik="Kalıcı depolar" result={storages} bos="Tanımlı kalıcı depo yok.">
+        {(items) => (
           <ul className="text-sm">
-            {storages.value.map((s) => (
+            {items.map((s) => (
               <li key={s.uuid} className="border-t border-neutral-100 py-2">
                 {s.name} — {s.mountPath}
               </li>
             ))}
           </ul>
         )}
-      </Kart>
+      </ResultSection>
 
-      <Kart baslik="Zamanlanmış görevler" tazelik={scheduledTasks.ok ? "taze" : "ulasilamiyor"}>
-        {!scheduledTasks.ok ? (
-          <p className="text-sm text-neutral-500">okunamadı</p>
-        ) : scheduledTasks.value.length === 0 ? (
-          <p className="text-sm text-neutral-500">Tanımlı zamanlanmış görev yok.</p>
-        ) : (
+      <ResultSection
+        baslik="Zamanlanmış görevler"
+        result={scheduledTasks}
+        bos="Tanımlı zamanlanmış görev yok."
+      >
+        {(items) => (
           <ul className="text-sm">
-            {scheduledTasks.value.map((t) => (
+            {items.map((t) => (
               <li key={t.uuid} className="flex justify-between border-t border-neutral-100 py-2">
                 <span>{t.name}</span>
                 <span className="text-neutral-500">
@@ -121,16 +148,14 @@ export default async function KaynakDetay({ params }: { params: Promise<{ uuid: 
             ))}
           </ul>
         )}
-      </Kart>
+      </ResultSection>
 
-      <Kart baslik="Son dağıtımlar" tazelik={deployments.ok ? "taze" : "ulasilamiyor"}>
-        {!deployments.ok ? (
-          <p className="text-sm text-neutral-500">okunamadı</p>
-        ) : deployments.value.length === 0 ? (
-          <p className="text-sm text-neutral-500">Dağıtım kaydı yok.</p>
-        ) : (
+      <ResultSection baslik="Son dağıtımlar" result={deployments} bos="Dağıtım kaydı yok.">
+        {(items) => (
           <ul className="text-sm">
-            {deployments.value.map((d, i) => (
+            {items.map((d, i) => (
+              // uuid boş bir satır (kötü biçimlendirilmiş yanıt) mümkün olduğundan
+              // indeks yalnızca anahtar tekilliği için yedek olarak eklenir.
               <li
                 key={`${d.uuid}-${i}`}
                 className="flex justify-between border-t border-neutral-100 py-2"
@@ -143,16 +168,16 @@ export default async function KaynakDetay({ params }: { params: Promise<{ uuid: 
             ))}
           </ul>
         )}
-      </Kart>
+      </ResultSection>
 
-      <Kart baslik="Ortam değişkeni anahtarları" tazelik={envKeys.ok ? "taze" : "ulasilamiyor"}>
-        {!envKeys.ok ? (
-          <p className="text-sm text-neutral-500">okunamadı</p>
-        ) : envKeys.value.length === 0 ? (
-          <p className="text-sm text-neutral-500">Tanımlı ortam değişkeni yok.</p>
-        ) : (
+      <ResultSection
+        baslik="Ortam değişkeni anahtarları"
+        result={envKeys}
+        bos="Tanımlı ortam değişkeni yok."
+      >
+        {(items) => (
           <ul className="flex flex-wrap gap-2 text-sm">
-            {envKeys.value.map((e) => (
+            {items.map((e) => (
               <li key={e.key} className="rounded border border-neutral-200 px-2 py-1 font-mono text-xs">
                 {e.key}
                 {e.isBuildTime ? " · build" : ""}
@@ -161,19 +186,15 @@ export default async function KaynakDetay({ params }: { params: Promise<{ uuid: 
             ))}
           </ul>
         )}
-      </Kart>
+      </ResultSection>
 
-      <Kart baslik="Log kuyruğu" tazelik={logs.ok ? "taze" : "ulasilamiyor"}>
-        {!logs.ok ? (
-          <p className="text-sm text-neutral-500">okunamadı</p>
-        ) : logs.value.length === 0 ? (
-          <p className="text-sm text-neutral-500">Log bulunamadı.</p>
-        ) : (
+      <ResultSection baslik="Log kuyruğu" result={logs} bos="Log bulunamadı.">
+        {(items) => (
           <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded bg-neutral-950 p-3 text-xs text-neutral-100">
-            {logs.value.join("\n")}
+            {items.join("\n")}
           </pre>
         )}
-      </Kart>
+      </ResultSection>
     </main>
   );
 }

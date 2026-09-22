@@ -1,6 +1,6 @@
 import type { CoolifyHttp } from "./http";
 import { maskSecrets } from "./mask";
-import { ok, type Result } from "./result";
+import { err, ok, type Result } from "./result";
 import { parseStatus } from "./status";
 import {
   RESOURCE_BUCKETS,
@@ -23,11 +23,20 @@ const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : 
 const bool = (v: unknown, fallback = false): boolean => (typeof v === "boolean" ? v : fallback);
 const rows = (v: unknown): Raw[] => (Array.isArray(v) ? (v as Raw[]) : []);
 
-/** Coolify bazı liste uçlarını doğrudan dizi, bazılarını `{ data: [...] }` sarmalıyla döner. */
-function extractRows(v: unknown): Raw[] {
+/**
+ * Coolify bazı liste uçlarını doğrudan dizi, bazılarını bir sarmal nesne
+ * içinde (ör. `{ data: [...] }`, `{ deployments: [...] }`) döner.
+ * `envelopeKeys` sırayla denenir; ilk dizi bulunan anahtar kullanılır.
+ */
+function extractRows(v: unknown, envelopeKeys: string[] = ["data"]): Raw[] {
   if (Array.isArray(v)) return v.filter((x): x is Raw => x != null && typeof x === "object");
-  if (v != null && typeof v === "object" && Array.isArray((v as Raw).data)) {
-    return ((v as Raw).data as unknown[]).filter((x): x is Raw => x != null && typeof x === "object");
+  if (v != null && typeof v === "object") {
+    for (const key of envelopeKeys) {
+      const inner = (v as Raw)[key];
+      if (Array.isArray(inner)) {
+        return inner.filter((x): x is Raw => x != null && typeof x === "object");
+      }
+    }
   }
   return [];
 }
@@ -35,6 +44,22 @@ function extractRows(v: unknown): Raw[] {
 function map<T>(result: Result<unknown>, fn: (rows: Raw[]) => T[]): Result<T[]> {
   if (!result.ok) return result;
   return ok(fn(rows(result.value)));
+}
+
+const UUID_SEGMENT = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * `uuid` bir Coolify kimliği biçimine uyuyor mu diye doğrular ve uyuyorsa
+ * URL'e güvenle gömülebilecek kodlanmış hâlini döner. Uymuyorsa AĞA HİÇ
+ * GİTMEDEN hata döner — path/query enjeksiyonunu (ör. `../../v2/servers`,
+ * `abc?x=1`) engeller. Kullanıcı denetimli her `uuid` path parçası bu
+ * fonksiyondan geçmeden `http.get`'e verilmemelidir.
+ */
+function seg(uuid: string): Result<string> {
+  if (!UUID_SEGMENT.test(uuid)) {
+    return err("not_found", "Geçersiz kaynak tanımlayıcı");
+  }
+  return ok(encodeURIComponent(uuid));
 }
 
 export async function listServers(http: CoolifyHttp): Promise<Result<FleetServer[]>> {
@@ -157,7 +182,9 @@ export async function getApplication(
   http: CoolifyHttp,
   uuid: string,
 ): Promise<Result<ApplicationDetail>> {
-  const r = await http.get<Raw>(`/applications/${uuid}`);
+  const path = seg(uuid);
+  if (!path.ok) return path;
+  const r = await http.get<Raw>(`/applications/${path.value}`);
   if (!r.ok) return r;
   const a = r.value;
 
@@ -203,7 +230,12 @@ export async function listApplicationEnvKeys(
   http: CoolifyHttp,
   uuid: string,
 ): Promise<Result<EnvKey[]>> {
-  const r = await http.get<unknown>(`/applications/${uuid}/envs`);
+  const path = seg(uuid);
+  if (!path.ok) return path;
+  const r = await http.get<unknown>(`/applications/${path.value}/envs`);
+  // NOT: gelen öğeler `value` VE `real_value` alanlarını taşıyabilir — ikisi de
+  // bilerek okunmaz. Aşağıdaki map yalnızca key/isBuildTime/isPreview üretir;
+  // sır değeri paket sınırını asla geçmez.
   return map(r, (list) =>
     list
       .filter((e): e is Raw => e != null && typeof e === "object")
@@ -215,27 +247,46 @@ export async function listApplicationEnvKeys(
   );
 }
 
+function mapStorageItem(s: Raw): ApplicationStorage {
+  return {
+    uuid: str(s.uuid),
+    name: str(s.name, str(s.fs_path)),
+    mountPath: str(s.mount_path, str(s.fs_path)),
+  };
+}
+
+/**
+ * Coolify bu uçta dizi değil, `{ persistent_storages: [...], file_storages: [...] }`
+ * biçiminde bir nesne döner; ikisi birden tek listeye toplanır. Düz dizi
+ * yanıtı da (ör. eski sürümler) geriye dönük uyumluluk için desteklenir.
+ */
 export async function listApplicationStorages(
   http: CoolifyHttp,
   uuid: string,
 ): Promise<Result<ApplicationStorage[]>> {
-  const r = await http.get<unknown>(`/applications/${uuid}/storages`);
-  return map(r, (list) =>
-    list
-      .filter((s): s is Raw => s != null && typeof s === "object")
-      .map((s) => ({
-        uuid: str(s.uuid),
-        name: str(s.name),
-        mountPath: str(s.mount_path),
-      })),
-  );
+  const path = seg(uuid);
+  if (!path.ok) return path;
+  const r = await http.get<unknown>(`/applications/${path.value}/storages`);
+  if (!r.ok) return r;
+
+  const value = r.value;
+  const items = Array.isArray(value)
+    ? extractRows(value)
+    : [
+        ...extractRows((value as Raw)?.persistent_storages),
+        ...extractRows((value as Raw)?.file_storages),
+      ];
+
+  return ok(items.map(mapStorageItem));
 }
 
 export async function listApplicationScheduledTasks(
   http: CoolifyHttp,
   uuid: string,
 ): Promise<Result<ScheduledTask[]>> {
-  const r = await http.get<unknown>(`/applications/${uuid}/scheduled-tasks`);
+  const path = seg(uuid);
+  if (!path.ok) return path;
+  const r = await http.get<unknown>(`/applications/${path.value}/scheduled-tasks`);
   return map(r, (list) =>
     list
       .filter((t): t is Raw => t != null && typeof t === "object")
@@ -254,9 +305,14 @@ export async function listApplicationDeployments(
   uuid: string,
   limit = 10,
 ): Promise<Result<DeploymentSummary[]>> {
-  const r = await http.get<unknown>(`/deployments/applications/${uuid}?skip=0&take=${limit}`);
+  const path = seg(uuid);
+  if (!path.ok) return path;
+  const r = await http.get<unknown>(`/deployments/applications/${path.value}?skip=0&take=${limit}`);
   if (!r.ok) return r;
-  const list = extractRows(r.value)
+  // Gerçek yanıt `{ count, deployments: [...] }` sarmalıdır; düz dizi ve
+  // `{ data: [...] }` da geriye dönük uyumluluk için desteklenir.
+  // Öğeler `logs` alanı taşıyabilir (HASSAS) — bilerek buraya kopyalanmaz.
+  const list = extractRows(r.value, ["deployments", "data"])
     .map((d) => ({
       uuid: str(d.deployment_uuid, str(d.uuid)),
       applicationName: str(d.application_name),
@@ -276,7 +332,9 @@ export async function getApplicationLogs(
   uuid: string,
   lines = 100,
 ): Promise<Result<string[]>> {
-  const r = await http.get<unknown>(`/applications/${uuid}/logs?lines=${lines}`);
+  const path = seg(uuid);
+  if (!path.ok) return path;
+  const r = await http.get<unknown>(`/applications/${path.value}/logs?lines=${lines}`);
   if (!r.ok) return r;
 
   const value = r.value;

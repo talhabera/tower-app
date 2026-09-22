@@ -202,13 +202,16 @@ describe("listDeployments", () => {
 });
 
 describe("listApplicationEnvKeys", () => {
-  it("yalnızca key, isBuildTime ve isPreview alanlarını döner — value asla paket sınırını geçmez", async () => {
+  // Gerçek yanıt (canlı Coolify, 2026-09-22 doğrulandı): öğeler HEM `value` HEM
+  // `real_value` taşır — ikisi de sahte değerlerle burada test edilir.
+  it("yalnızca key, isBuildTime ve isPreview alanlarını döner — value ve real_value asla paket sınırını geçmez", async () => {
     const r = await listApplicationEnvKeys(
       stubHttp([
         {
           uuid: "env-1",
           key: "DATABASE_URL",
           value: "supersecret",
+          real_value: "alsosecretvalue",
           is_build_time: true,
           is_preview: false,
         },
@@ -221,7 +224,10 @@ describe("listApplicationEnvKeys", () => {
     expect(r.value[0].key).toBe("DATABASE_URL");
     expect(r.value[0].isBuildTime).toBe(true);
     expect(r.value[0].isPreview).toBe(false);
+    expect(Object.keys(r.value[0])).not.toContain("value");
+    expect(Object.keys(r.value[0])).not.toContain("real_value");
     expect(JSON.stringify(r.value)).not.toContain("supersecret");
+    expect(JSON.stringify(r.value)).not.toContain("alsosecretvalue");
   });
 
   it("kötü biçimlendirilmiş öğeleri atlar", async () => {
@@ -234,7 +240,27 @@ describe("listApplicationEnvKeys", () => {
 });
 
 describe("listApplicationStorages", () => {
-  it("kalıcı depoları uuid, ad ve mountPath ile eşler", async () => {
+  // Gerçek yanıt (canlı Coolify, 2026-09-22 doğrulandı): dizi değil,
+  // { persistent_storages: [...], file_storages: [...] } biçiminde bir nesne.
+  it("persistent_storages ve file_storages'ı tek listeye toplar", async () => {
+    const r = await listApplicationStorages(
+      stubHttp({
+        persistent_storages: [{ uuid: "st-1", name: "veri", mount_path: "/data" }],
+        file_storages: [{ uuid: "fs-1", fs_path: "/app/config.yaml" }],
+      }),
+      "app-uuid",
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.length).toBe(2);
+    expect(r.value[0].uuid).toBe("st-1");
+    expect(r.value[0].name).toBe("veri");
+    expect(r.value[0].mountPath).toBe("/data");
+    expect(r.value[1].uuid).toBe("fs-1");
+    expect(r.value[1].mountPath).toBe("/app/config.yaml");
+  });
+
+  it("geriye dönük uyumluluk için düz dizi yanıtını da kabul eder", async () => {
     const r = await listApplicationStorages(
       stubHttp([{ uuid: "st-1", name: "veri", mount_path: "/data" }]),
       "app-uuid",
@@ -243,8 +269,6 @@ describe("listApplicationStorages", () => {
     if (!r.ok) return;
     expect(r.value.length).toBe(1);
     expect(r.value[0].uuid).toBe("st-1");
-    expect(r.value[0].name).toBe("veri");
-    expect(r.value[0].mountPath).toBe("/data");
   });
 });
 
@@ -264,7 +288,44 @@ describe("listApplicationScheduledTasks", () => {
 });
 
 describe("listApplicationDeployments", () => {
-  it("uygulamaya özel son dağıtımları eşler ve limitli döner", async () => {
+  // Gerçek yanıt (canlı Coolify, 2026-09-22 doğrulandı): { count, deployments: [...] }.
+  // Öğeler bir `logs` alanı da taşır (HASSAS) — mapped tipe asla kopyalanmamalı.
+  it("uygulamaya özel son dağıtımları { count, deployments } sarmalından eşler ve logs alanını kopyalamaz", async () => {
+    const r = await listApplicationDeployments(
+      stubHttp({
+        count: 1,
+        deployments: [
+          {
+            deployment_uuid: "deploy-1",
+            status: "finished",
+            commit: "abc123",
+            commit_message: "fix: bug",
+            created_at: "2026-09-22T10:00:00Z",
+            finished_at: "2026-09-22T10:05:00Z",
+            server_name: "prod-1",
+            deployment_url: "https://example.com",
+            is_webhook: false,
+            is_api: true,
+            rollback: false,
+            force_rebuild: false,
+            restart_only: false,
+            logs: "gizli dağıtım logu, asla sızmamalı",
+          },
+        ],
+      }),
+      "app-uuid",
+      10,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.length).toBe(1);
+    expect(r.value[0].uuid).toBe("deploy-1");
+    expect(r.value[0].status).toBe("finished");
+    expect(Object.keys(r.value[0])).not.toContain("logs");
+    expect(JSON.stringify(r.value)).not.toContain("gizli dağıtım logu");
+  });
+
+  it("geriye dönük uyumluluk için { data: [...] } sarmalını da kabul eder", async () => {
     const r = await listApplicationDeployments(
       stubHttp({
         data: [
@@ -283,10 +344,9 @@ describe("listApplicationDeployments", () => {
     if (!r.ok) return;
     expect(r.value.length).toBe(1);
     expect(r.value[0].uuid).toBe("deploy-1");
-    expect(r.value[0].status).toBe("finished");
   });
 
-  it("düz dizi yanıtını da kabul eder", async () => {
+  it("geriye dönük uyumluluk için düz dizi yanıtını da kabul eder", async () => {
     const r = await listApplicationDeployments(
       stubHttp([{ deployment_uuid: "d1", status: "running", created_at: "t" }]),
       "app-uuid",
@@ -315,5 +375,47 @@ describe("getApplicationLogs", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.length).toBe(2);
+  });
+});
+
+describe("uuid yol/sorgu enjeksiyonu koruması", () => {
+  const BAD_UUIDS = ["../../v2/servers", "abc?x=1"];
+
+  function trackedHttp(): { http: CoolifyHttp; calls: string[] } {
+    const calls: string[] = [];
+    const http: CoolifyHttp = {
+      get: async <T>(path: string) => {
+        calls.push(path);
+        return ok({} as T);
+      },
+    };
+    return { http, calls };
+  }
+
+  const CALLS: Array<[string, (http: CoolifyHttp, uuid: string) => Promise<{ ok: boolean }>]> = [
+    ["getApplication", (http, uuid) => getApplication(http, uuid)],
+    ["listApplicationEnvKeys", (http, uuid) => listApplicationEnvKeys(http, uuid)],
+    ["listApplicationStorages", (http, uuid) => listApplicationStorages(http, uuid)],
+    ["listApplicationScheduledTasks", (http, uuid) => listApplicationScheduledTasks(http, uuid)],
+    ["listApplicationDeployments", (http, uuid) => listApplicationDeployments(http, uuid)],
+    ["getApplicationLogs", (http, uuid) => getApplicationLogs(http, uuid)],
+  ];
+
+  for (const [name, call] of CALLS) {
+    for (const bad of BAD_UUIDS) {
+      it(`${name}: geçersiz uuid '${bad}' için ağa hiç gitmeden hata döner`, async () => {
+        const { http, calls } = trackedHttp();
+        const r = await call(http, bad);
+        expect(r.ok).toBe(false);
+        expect(calls.length).toBe(0);
+      });
+    }
+  }
+
+  it("geçerli uuid ile normal şekilde fetch tetiklenir", async () => {
+    const { http, calls } = trackedHttp();
+    const r = await getApplication(http, "abc-123_DEF");
+    expect(r.ok).toBe(true);
+    expect(calls).toEqual(["/applications/abc-123_DEF"]);
   });
 });
