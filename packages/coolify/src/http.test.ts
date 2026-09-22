@@ -53,6 +53,13 @@ describe("createClient.get", () => {
     if (!r.ok) expect(r.error.kind).toBe("unauthorized");
   });
 
+  it("403'ü unauthorized'a çevirir", async () => {
+    const client = createClient(config, async () => jsonResponse({}, 403));
+    const r = await client.get("/servers");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.kind).toBe("unauthorized");
+  });
+
   it("404'ü not_found'a çevirir", async () => {
     const client = createClient(config, async () => jsonResponse({}, 404));
     const r = await client.get("/servers/yok");
@@ -76,6 +83,15 @@ describe("createClient.get", () => {
     if (!r.ok) expect(r.error.kind).toBe("unreachable");
   });
 
+  it("timeout'u unreachable'a çevirir", async () => {
+    const client = createClient(config, async () => {
+      throw new DOMException("The operation was aborted", "AbortError");
+    });
+    const r = await client.get("/servers");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.kind).toBe("unreachable");
+  });
+
   it("JSON olmayan gövdeyi malformed'a çevirir", async () => {
     const client = createClient(config, async () => new Response("<html>", { status: 200 }));
     const r = await client.get("/servers");
@@ -86,6 +102,20 @@ describe("createClient.get", () => {
   it("hata mesajında token sızdırmaz", async () => {
     const client = createClient(config, async () => jsonResponse({}, 401));
     const r = await client.get("/servers");
+    expect(r.ok).toBe(false);
     if (!r.ok) expect(JSON.stringify(r.error)).not.toContain("t0ken");
+  });
+
+  it("gizli bilgileri hata mesajında maskeler", async () => {
+    const client = createClient(config, async () => {
+      throw new Error("connection error");
+    });
+    const r = await client.get("/servers?password=hunter2");
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      const errorStr = JSON.stringify(r.error);
+      expect(errorStr).toContain("password=***");
+      expect(errorStr).not.toContain("hunter2");
+    }
   });
 });

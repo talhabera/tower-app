@@ -1,5 +1,6 @@
 import type { CoolifyConfig } from "./config";
 import { err, ok, type Result } from "./result";
+import { maskSecrets } from "./mask";
 
 const TIMEOUT_MS = 20_000;
 
@@ -28,28 +29,28 @@ export function createClient(
         });
       } catch {
         // Hata nesnesi taşınmaz: token içeren istek bağlamı sızabilir.
-        return err("unreachable", `Coolify'a ulaşılamadı: ${path}`);
+        return err("unreachable", maskSecrets(`Coolify'a ulaşılamadı: ${path}`));
       } finally {
         clearTimeout(timer);
       }
 
       if (response.status === 401 || response.status === 403) {
-        return err("unauthorized", "Coolify token'ı reddedildi", response.status);
+        return err("unauthorized", maskSecrets("Coolify token'ı reddedildi"), response.status);
       }
       if (response.status === 404) {
-        return err("not_found", `Kaynak bulunamadı: ${path}`, 404);
+        return err("not_found", maskSecrets(`Kaynak bulunamadı: ${path}`), 404);
       }
       if (response.status === 429) {
-        return err("rate_limited", "Coolify istek sınırı aşıldı", 429);
+        return err("rate_limited", maskSecrets("Coolify istek sınırı aşıldı"), 429);
       }
       if (!response.ok) {
-        return err("malformed", `Beklenmeyen durum kodu: ${response.status}`, response.status);
+        return err("malformed", maskSecrets(`Beklenmeyen durum kodu: ${response.status}`), response.status);
       }
 
       try {
         return ok((await response.json()) as T);
       } catch {
-        return err("malformed", `Cevap JSON değil: ${path}`);
+        return err("malformed", maskSecrets(`Cevap JSON değil: ${path}`));
       }
     },
   };
