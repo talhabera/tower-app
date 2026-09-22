@@ -21,6 +21,7 @@ type Raw = Record<string, unknown>;
 
 const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
 const bool = (v: unknown, fallback = false): boolean => (typeof v === "boolean" ? v : fallback);
+const isObject = (v: unknown): v is Raw => v != null && typeof v === "object" && !Array.isArray(v);
 const rows = (v: unknown): Raw[] => (Array.isArray(v) ? (v as Raw[]) : []);
 
 /**
@@ -94,7 +95,7 @@ export async function listEnvironments(
   http: CoolifyHttp,
   projectUuid: string,
 ): Promise<Result<Array<{ uuid: string; name: string }>>> {
-  const r = await http.get<unknown>(`/projects/${projectUuid}/environments`);
+  const r = await http.get<unknown>(`/projects/${encodeURIComponent(projectUuid)}/environments`);
   return map(r, (list) =>
     list
       .filter((e): e is Raw => e != null && typeof e === "object")
@@ -108,8 +109,13 @@ export async function getEnvironment(
   environmentName: string,
   projectName = "",
 ): Promise<Result<FleetEnvironment>> {
-  const r = await http.get<Raw>(`/projects/${projectUuid}/${environmentName}`);
+  // Ortam adları serbest metindir (ör. "#", "?", "/", "%" içerebilir): seg()
+  // regex'i uygulanmaz, yalnızca kodlanır.
+  const r = await http.get<unknown>(
+    `/projects/${encodeURIComponent(projectUuid)}/${encodeURIComponent(environmentName)}`,
+  );
   if (!r.ok) return r;
+  if (!isObject(r.value)) return err("malformed", "Ortam cevabı nesne değil");
 
   const detail = r.value;
   const name = str(detail.name, environmentName);
@@ -150,7 +156,7 @@ export async function getDatabaseBackups(
   http: CoolifyHttp,
   databaseUuid: string,
 ): Promise<Result<DatabaseBackup[]>> {
-  const r = await http.get<unknown>(`/databases/${databaseUuid}/backups`);
+  const r = await http.get<unknown>(`/databases/${encodeURIComponent(databaseUuid)}/backups`);
   return map(r, (list) =>
     list
       .filter((b): b is Raw => b != null && typeof b === "object")
@@ -184,16 +190,18 @@ export async function getApplication(
 ): Promise<Result<ApplicationDetail>> {
   const path = seg(uuid);
   if (!path.ok) return path;
-  const r = await http.get<Raw>(`/applications/${path.value}`);
+  const r = await http.get<unknown>(`/applications/${path.value}`);
   if (!r.ok) return r;
+  if (!isObject(r.value)) return err("malformed", "Uygulama cevabı nesne değil");
   const a = r.value;
 
   return ok({
     uuid: str(a.uuid),
     name: str(a.name),
-    description: str(a.description),
+    // Serbest metin alanları: kullanıcı URL'e token gömebilir (https://TOKEN@host/...).
+    description: maskSecrets(str(a.description)),
     buildPack: str(a.build_pack),
-    gitRepository: str(a.git_repository),
+    gitRepository: maskSecrets(str(a.git_repository)),
     gitBranch: str(a.git_branch),
     domains: str(a.fqdn)
       .split(",")
@@ -272,10 +280,9 @@ export async function listApplicationStorages(
   const value = r.value;
   const items = Array.isArray(value)
     ? extractRows(value)
-    : [
-        ...extractRows((value as Raw)?.persistent_storages),
-        ...extractRows((value as Raw)?.file_storages),
-      ];
+    : isObject(value)
+      ? [...extractRows(value.persistent_storages), ...extractRows(value.file_storages)]
+      : [];
 
   return ok(items.map(mapStorageItem));
 }

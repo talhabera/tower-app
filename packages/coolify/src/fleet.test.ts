@@ -120,8 +120,15 @@ describe("loadFleet", () => {
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.value.servers).toEqual([]);
+      expect(r.value.serversFailure).toBeTruthy();
       expect(r.value.projects).toHaveLength(2);
     }
+  });
+
+  it("sunucu listesi okunduğunda serversFailure boştur", async () => {
+    const r = await loadFleet(routedHttp(ROUTES));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.serversFailure).toBeUndefined();
   });
 
   it("loadFleet toplam eşzamanlılık sınırını aşmaz", async () => {

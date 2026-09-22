@@ -69,4 +69,20 @@ describe("maskSecrets", () => {
       "Authorization: BEARER ***",
     );
   });
+
+  it("20 karakterlik rastgele dizileri maskeler (spec eşiği)", () => {
+    const twenty = "a1b2c3d4e5f6g7h8i9j0";
+    expect(twenty).toHaveLength(20);
+    expect(maskSecrets(`istek ${twenty} bitti`)).toBe("istek *** bitti");
+  });
+
+  it("19 karakterlik diziyi ve rakamsız uzun kelimeleri maskelemez", () => {
+    expect(maskSecrets("id a1b2c3d4e5f6g7h8i9 ok")).toBe("id a1b2c3d4e5f6g7h8i9 ok");
+    expect(maskSecrets("internationalization-framework")).toBe("internationalization-framework");
+  });
+
+  it("parolasız userinfo'daki token'ı maskeler", () => {
+    expect(maskSecrets("https://ghp_fake123@github.com/o/r")).toBe("https://***@github.com/o/r");
+    expect(maskSecrets("https://x:ghp_fake123@github.com/o/r")).toBe("https://x:***@github.com/o/r");
+  });
 });

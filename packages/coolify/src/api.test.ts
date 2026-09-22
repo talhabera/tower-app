@@ -419,3 +419,82 @@ describe("uuid yol/sorgu enjeksiyonu koruması", () => {
     expect(calls).toEqual(["/applications/abc-123_DEF"]);
   });
 });
+
+describe("serbest metin path parçaları kodlanır", () => {
+  function trackedHttp(): { http: CoolifyHttp; calls: string[] } {
+    const calls: string[] = [];
+    const http: CoolifyHttp = {
+      get: async <T>(path: string) => {
+        calls.push(path);
+        return ok([] as T);
+      },
+    };
+    return { http, calls };
+  }
+
+  it("listEnvironments projectUuid'yi kodlar", async () => {
+    const { http, calls } = trackedHttp();
+    await listEnvironments(http, "p/1?x");
+    expect(calls).toEqual(["/projects/p%2F1%3Fx/environments"]);
+  });
+
+  it("getEnvironment ortam adını kodlar", async () => {
+    const { http, calls } = trackedHttp();
+    await getEnvironment(http, "proj", "dev #2/%?");
+    expect(calls).toEqual(["/projects/proj/dev%20%232%2F%25%3F"]);
+  });
+
+  it("getDatabaseBackups databaseUuid'yi kodlar", async () => {
+    const { http, calls } = trackedHttp();
+    await getDatabaseBackups(http, "db/../x");
+    expect(calls).toEqual(["/databases/db%2F..%2Fx/backups"]);
+  });
+});
+
+describe("null / nesne olmayan JSON gövdeleri fırlatmaz", () => {
+  for (const body of [null, 42, "metin", [1, 2]]) {
+    it(`getApplication ${JSON.stringify(body)} için malformed döner`, async () => {
+      const r = await getApplication(stubHttp(body), "app-uuid");
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.kind).toBe("malformed");
+    });
+
+    it(`getEnvironment ${JSON.stringify(body)} için malformed döner`, async () => {
+      const r = await getEnvironment(stubHttp(body), "proj", "production");
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.kind).toBe("malformed");
+    });
+
+    it(`listApplicationStorages ${JSON.stringify(body)} için fırlatmaz`, async () => {
+      const r = await listApplicationStorages(stubHttp(body), "app-uuid");
+      expect(r.ok).toBe(true);
+    });
+  }
+});
+
+describe("getApplication serbest metin alanlarını maskeler", () => {
+  it("git deposu URL'indeki token paket sınırını geçmez", async () => {
+    const fakeToken = "ghp_FAKEfake0123456789abcdefFAKE0123";
+    const r = await getApplication(
+      stubHttp({
+        uuid: "a1",
+        name: "app",
+        git_repository: `https://x:${fakeToken}@github.com/o/r`,
+        description: `deploy with ${fakeToken}`,
+      }),
+      "a1",
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(JSON.stringify(r.value)).not.toContain(fakeToken);
+    expect(r.value.gitRepository).toBe("https://x:***@github.com/o/r");
+  });
+
+  it("parolasız userinfo token'ı da maskelenir", async () => {
+    const r = await getApplication(
+      stubHttp({ uuid: "a1", git_repository: "https://ghpFAKE01@github.com/o/r" }),
+      "a1",
+    );
+    expect(r.ok && r.value.gitRepository).toBe("https://***@github.com/o/r");
+  });
+});

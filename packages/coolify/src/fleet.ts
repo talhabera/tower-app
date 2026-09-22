@@ -11,6 +11,8 @@ export type Fleet = {
   projects: FleetProject[];
   /** ISO 8601. Kartların tazelik göstergesi bunu kullanır. */
   loadedAt: string;
+  /** Sunucu listesi okunamadıysa dolu gelir; `servers` boş olsa da "sunucu yok" demek değildir. */
+  serversFailure?: string;
 };
 
 type ProjectWithEnvList = {
@@ -111,5 +113,10 @@ export async function loadFleet(http: CoolifyHttp): Promise<Result<Fleet>> {
     failure: project.envListFailure,
   }));
 
-  return ok({ servers, projects, loadedAt: new Date().toISOString() });
+  return ok({
+    servers,
+    projects,
+    loadedAt: new Date().toISOString(),
+    ...(serversResult.ok ? {} : { serversFailure: serversResult.error.message }),
+  });
 }

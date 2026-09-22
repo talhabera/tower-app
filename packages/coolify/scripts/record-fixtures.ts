@@ -9,6 +9,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createClient } from "../src/http";
 import { readConfig } from "../src/config";
+import { maskSecrets } from "../src/mask";
 import { redactJson } from "../src/redact";
 
 const OUT_DIR = path.join(import.meta.dirname, "..", "src", "fixtures");
@@ -22,7 +23,9 @@ async function save(client: ReturnType<typeof createClient>, name: string, apiPa
   const masked = redactJson(result.value);
   writeFileSync(path.join(OUT_DIR, `${name}.json`), JSON.stringify(masked, null, 2));
   console.log(`yazıldı ${name}.json`);
-  return masked;
+  // Gezinme (sonraki uçların uuid/ad'ları) ham değerle yapılır: maskeleme 20+
+  // karakterlik kimlikleri de "***" yapar. Ham değer yalnızca bellekte kalır.
+  return result.value;
 }
 
 async function main() {
@@ -48,19 +51,23 @@ async function main() {
   const envs = (await save(
     client,
     `environments-${first.uuid}`,
-    `/projects/${first.uuid}/environments`,
+    `/projects/${encodeURIComponent(first.uuid)}/environments`,
   )) as Array<{ name: string }> | null;
 
   if (envs?.length) {
     const detail = (await save(
       client,
       "environment-detail",
-      `/projects/${first.uuid}/${envs[0].name}`,
+      `/projects/${encodeURIComponent(first.uuid)}/${encodeURIComponent(envs[0].name)}`,
     )) as { applications?: Array<{ uuid: string }> } | null;
 
     const app = detail?.applications?.[0];
-    if (app) await save(client, "application-detail", `/applications/${app.uuid}`);
+    if (app) await save(client, "application-detail", `/applications/${encodeURIComponent(app.uuid)}`);
   }
 }
 
-main();
+main().catch((e: unknown) => {
+  // Hata nesnesi istek bağlamı (token) taşıyabilir: yalnızca maskelenmiş mesaj basılır.
+  console.error(`kayıt başarısız: ${maskSecrets(e instanceof Error ? e.message : String(e))}`);
+  process.exit(1);
+});
