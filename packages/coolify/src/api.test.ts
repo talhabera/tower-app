@@ -14,6 +14,11 @@ import {
   listS3Storages,
   getApplication,
   listDeployments,
+  listApplicationEnvKeys,
+  listApplicationStorages,
+  listApplicationScheduledTasks,
+  listApplicationDeployments,
+  getApplicationLogs,
 } from "./api";
 import type { CoolifyHttp } from "./http";
 import { ok } from "./result";
@@ -193,5 +198,122 @@ describe("listDeployments", () => {
     expect(r.value[0].uuid).toBe("deploy-1");
     expect(r.value[0].applicationName).toBe("nexauth");
     expect(r.value[0].status).toBe("running");
+  });
+});
+
+describe("listApplicationEnvKeys", () => {
+  it("yalnızca key, isBuildTime ve isPreview alanlarını döner — value asla paket sınırını geçmez", async () => {
+    const r = await listApplicationEnvKeys(
+      stubHttp([
+        {
+          uuid: "env-1",
+          key: "DATABASE_URL",
+          value: "supersecret",
+          is_build_time: true,
+          is_preview: false,
+        },
+      ]),
+      "app-uuid",
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.length).toBe(1);
+    expect(r.value[0].key).toBe("DATABASE_URL");
+    expect(r.value[0].isBuildTime).toBe(true);
+    expect(r.value[0].isPreview).toBe(false);
+    expect(JSON.stringify(r.value)).not.toContain("supersecret");
+  });
+
+  it("kötü biçimlendirilmiş öğeleri atlar", async () => {
+    const r = await listApplicationEnvKeys(stubHttp([null, 42, { key: "OK" }]), "app-uuid");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.length).toBe(1);
+    expect(r.value[0].key).toBe("OK");
+  });
+});
+
+describe("listApplicationStorages", () => {
+  it("kalıcı depoları uuid, ad ve mountPath ile eşler", async () => {
+    const r = await listApplicationStorages(
+      stubHttp([{ uuid: "st-1", name: "veri", mount_path: "/data" }]),
+      "app-uuid",
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.length).toBe(1);
+    expect(r.value[0].uuid).toBe("st-1");
+    expect(r.value[0].name).toBe("veri");
+    expect(r.value[0].mountPath).toBe("/data");
+  });
+});
+
+describe("listApplicationScheduledTasks", () => {
+  it("zamanlanmış görevleri uuid, ad, frequency ve enabled ile eşler", async () => {
+    const r = await listApplicationScheduledTasks(
+      stubHttp([{ uuid: "task-1", name: "temizlik", frequency: "0 0 * * *", enabled: true }]),
+      "app-uuid",
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.length).toBe(1);
+    expect(r.value[0].uuid).toBe("task-1");
+    expect(r.value[0].frequency).toBe("0 0 * * *");
+    expect(r.value[0].enabled).toBe(true);
+  });
+});
+
+describe("listApplicationDeployments", () => {
+  it("uygulamaya özel son dağıtımları eşler ve limitli döner", async () => {
+    const r = await listApplicationDeployments(
+      stubHttp({
+        data: [
+          {
+            deployment_uuid: "deploy-1",
+            application_name: "nexauth",
+            status: "finished",
+            created_at: "2026-09-22T10:00:00Z",
+          },
+        ],
+      }),
+      "app-uuid",
+      10,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.length).toBe(1);
+    expect(r.value[0].uuid).toBe("deploy-1");
+    expect(r.value[0].status).toBe("finished");
+  });
+
+  it("düz dizi yanıtını da kabul eder", async () => {
+    const r = await listApplicationDeployments(
+      stubHttp([{ deployment_uuid: "d1", status: "running", created_at: "t" }]),
+      "app-uuid",
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.length).toBe(1);
+  });
+});
+
+describe("getApplicationLogs", () => {
+  it("log satırlarındaki gizli bilgileri maskeler", async () => {
+    const r = await getApplicationLogs(
+      stubHttp({ logs: "başlatılıyor\npassword=hunter2\nhazır" }),
+      "app-uuid",
+      100,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value).toContain("password=***");
+    expect(r.value.join("\n")).not.toContain("hunter2");
+  });
+
+  it("dizi biçimindeki log yanıtını da kabul eder", async () => {
+    const r = await getApplicationLogs(stubHttp(["satır 1", "satır 2"]), "app-uuid");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.length).toBe(2);
   });
 });

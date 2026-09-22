@@ -86,7 +86,21 @@ export type S3Storage = {
 
 export type EnvKey = {
   key: string;
-  isBuildTime: boolean;
+  isBuildTime?: boolean;
+  isPreview?: boolean;
+};
+
+export type ApplicationStorage = {
+  uuid: string;
+  name: string;
+  mountPath: string;
+};
+
+export type ScheduledTask = {
+  uuid: string;
+  name: string;
+  frequency: string;
+  enabled: boolean;
 };
 
 export type ApplicationDetail = {
