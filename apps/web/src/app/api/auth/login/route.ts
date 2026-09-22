@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import * as client from "openid-client";
 import { callbackUrl, oidcConfig } from "@/server/oidc";
-import { sessionCookieOptions } from "@/server/session";
+import { PKCE_COOKIE, STATE_COOKIE, sessionCookieOptions } from "@/server/session";
 
 export async function GET(request: NextRequest) {
   const config = await oidcConfig();
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
   const response = NextResponse.redirect(url.href);
   const options = sessionCookieOptions(request.url, 600);
-  response.cookies.set("tower_pkce", codeVerifier, options);
-  response.cookies.set("tower_state", state, options);
+  response.cookies.set(PKCE_COOKIE, codeVerifier, options);
+  response.cookies.set(STATE_COOKIE, state, options);
   return response;
 }

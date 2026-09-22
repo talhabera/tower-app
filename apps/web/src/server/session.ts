@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { CompactEncrypt, compactDecrypt } from "jose";
 
 export const SESSION_COOKIE = "tower_session";
+export const PKCE_COOKIE = "tower_pkce";
+export const STATE_COOKIE = "tower_state";
 
 export type TowerSession = {
   sub: string;

@@ -1,27 +1,34 @@
 import { NextResponse, type NextRequest } from "next/server";
 import * as client from "openid-client";
-import { oidcConfig } from "@/server/oidc";
-import { SESSION_COOKIE, sealSession, sessionCookieOptions } from "@/server/session";
+import { callbackCurrentUrl, oidcConfig } from "@/server/oidc";
+import { PKCE_COOKIE, SESSION_COOKIE, STATE_COOKIE, sealSession, sessionCookieOptions } from "@/server/session";
+
+/** PKCE/state çerezleri tek kullanımlıktır: her çıkış yolunda (başarı da dahil) silinir. */
+function clearTempCookies(response: NextResponse): NextResponse {
+  response.cookies.delete(PKCE_COOKIE);
+  response.cookies.delete(STATE_COOKIE);
+  return response;
+}
 
 export async function GET(request: NextRequest) {
-  const codeVerifier = request.cookies.get("tower_pkce")?.value;
-  const expectedState = request.cookies.get("tower_state")?.value;
+  const codeVerifier = request.cookies.get(PKCE_COOKIE)?.value;
+  const expectedState = request.cookies.get(STATE_COOKIE)?.value;
   const secret = process.env.TOWER_SESSION_SECRET;
 
   if (!codeVerifier || !expectedState || !secret) {
-    return NextResponse.redirect(new URL("/giris-hatasi", request.url));
+    return clearTempCookies(NextResponse.redirect(new URL("/giris-hatasi", request.url)));
   }
 
   const config = await oidcConfig();
   let claims: Record<string, unknown>;
   try {
-    const tokens = await client.authorizationCodeGrant(config, new URL(request.url), {
+    const tokens = await client.authorizationCodeGrant(config, callbackCurrentUrl(request.url), {
       pkceCodeVerifier: codeVerifier,
       expectedState,
     });
     claims = (tokens.claims() ?? {}) as Record<string, unknown>;
   } catch {
-    return NextResponse.redirect(new URL("/giris-hatasi", request.url));
+    return clearTempCookies(NextResponse.redirect(new URL("/giris-hatasi", request.url)));
   }
 
   const token = await sealSession(
@@ -36,7 +43,5 @@ export async function GET(request: NextRequest) {
 
   const response = NextResponse.redirect(new URL("/", request.url));
   response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(request.url, 8 * 60 * 60));
-  response.cookies.delete("tower_pkce");
-  response.cookies.delete("tower_state");
-  return response;
+  return clearTempCookies(response);
 }
