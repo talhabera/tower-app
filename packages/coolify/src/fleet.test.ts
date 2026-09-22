@@ -37,7 +37,7 @@ const ROUTES = {
 };
 
 describe("mapPool", () => {
-  it("eşzamanlılık sınırını aşmaz", async () => {
+  it("eşzamanlılık sınırını aşmaz ve sınırı ulaştırır", async () => {
     let active = 0;
     let peak = 0;
     const items = Array.from({ length: 20 }, (_, i) => i);
@@ -50,12 +50,22 @@ describe("mapPool", () => {
       return n;
     });
 
-    expect(peak).toBeLessThanOrEqual(6);
+    expect(peak).toBe(6);
   });
 
   it("sırayı korur", async () => {
     const out = await mapPool([1, 2, 3, 4], 2, async (n) => n * 10);
     expect(out).toEqual([10, 20, 30, 40]);
+  });
+
+  it("boş input boş output döner", async () => {
+    const out = await mapPool([], 6, async (n) => n);
+    expect(out).toEqual([]);
+  });
+
+  it("limit > items.length için tüm öğeleri işler", async () => {
+    const out = await mapPool([1, 2, 3], 10, async (n) => n * 2);
+    expect(out).toEqual([2, 4, 6]);
   });
 });
 
@@ -89,6 +99,17 @@ describe("loadFleet", () => {
     expect(nexauth?.environments[0].resources.length).toBeGreaterThan(0);
   });
 
+  it("ortam detayları alınamazsa hata kaydedilir", async () => {
+    const r = await loadFleet(routedHttp(ROUTES, ["/projects/p1/production"]));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const nexauth = r.value.projects.find((p) => p.name === "nexauth");
+    expect(nexauth?.environments).toHaveLength(1);
+    expect(nexauth?.environments[0].failure).toBeTruthy();
+    expect(nexauth?.environments[0].resources).toEqual([]);
+  });
+
   it("proje listesi alınamazsa hata döner", async () => {
     const r = await loadFleet(routedHttp(ROUTES, ["/projects"]));
     expect(r.ok).toBe(false);
@@ -101,5 +122,57 @@ describe("loadFleet", () => {
       expect(r.value.servers).toEqual([]);
       expect(r.value.projects).toHaveLength(2);
     }
+  });
+
+  it("loadFleet toplam eşzamanlılık sınırını aşmaz", async () => {
+    let active = 0;
+    let peak = 0;
+    let callCount = 0;
+
+    function trackingHttp(routes: Record<string, unknown>, failing: string[] = []): CoolifyHttp {
+      return {
+        get: async <T>(path: string) => {
+          if (failing.includes(path)) return err<T>("unreachable", `düştü: ${path}`);
+          const hit = routes[path];
+          if (hit === undefined) return err<T>("not_found", path);
+
+          active += 1;
+          callCount += 1;
+          peak = Math.max(peak, active);
+          await new Promise((r) => setTimeout(r, 2));
+          active -= 1;
+
+          return ok(hit as T);
+        },
+      };
+    }
+
+    const manyProjectsRoutes: Record<string, unknown> = {
+      "/servers": [],
+      "/projects": Array.from({ length: 4 }, (_, i) => ({
+        uuid: `p${i}`,
+        name: `project-${i}`,
+      })),
+    };
+
+    for (let i = 0; i < 4; i++) {
+      manyProjectsRoutes[`/projects/p${i}/environments`] = Array.from({ length: 3 }, (_, j) => ({
+        uuid: `e${i}-${j}`,
+        name: `env-${j}`,
+      }));
+      for (let j = 0; j < 3; j++) {
+        manyProjectsRoutes[`/projects/p${i}/env-${j}`] = {
+          uuid: `e${i}-${j}`,
+          name: `env-${j}`,
+          applications: [],
+          postgresqls: [],
+        };
+      }
+    }
+
+    const r = await loadFleet(trackingHttp(manyProjectsRoutes));
+    expect(r.ok).toBe(true);
+    expect(peak).toBeLessThanOrEqual(6);
+    expect(callCount).toBeGreaterThan(0);
   });
 });

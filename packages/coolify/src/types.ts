@@ -50,6 +50,8 @@ export type FleetEnvironment = {
   uuid: string;
   name: string;
   resources: FleetResource[];
+  /** Ortam detayları alınamazsa dolu gelir; kaynaklar yine de render edilir. */
+  failure?: string;
 };
 
 export type FleetProject = {
