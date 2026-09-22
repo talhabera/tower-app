@@ -1,6 +1,7 @@
 import type { CoolifyHttp } from "./http";
 import { maskSecrets } from "./mask";
 import { err, ok, type Result } from "./result";
+import { seg } from "./segment";
 import { parseStatus } from "./status";
 import {
   RESOURCE_BUCKETS,
@@ -45,22 +46,6 @@ function extractRows(v: unknown, envelopeKeys: string[] = ["data"]): Raw[] {
 function map<T>(result: Result<unknown>, fn: (rows: Raw[]) => T[]): Result<T[]> {
   if (!result.ok) return result;
   return ok(fn(rows(result.value)));
-}
-
-const UUID_SEGMENT = /^[A-Za-z0-9_-]{1,64}$/;
-
-/**
- * `uuid` bir Coolify kimliği biçimine uyuyor mu diye doğrular ve uyuyorsa
- * URL'e güvenle gömülebilecek kodlanmış hâlini döner. Uymuyorsa AĞA HİÇ
- * GİTMEDEN hata döner — path/query enjeksiyonunu (ör. `../../v2/servers`,
- * `abc?x=1`) engeller. Kullanıcı denetimli her `uuid` path parçası bu
- * fonksiyondan geçmeden `http.get`'e verilmemelidir.
- */
-function seg(uuid: string): Result<string> {
-  if (!UUID_SEGMENT.test(uuid)) {
-    return err("not_found", "Geçersiz kaynak tanımlayıcı");
-  }
-  return ok(encodeURIComponent(uuid));
 }
 
 export async function listServers(http: CoolifyHttp): Promise<Result<FleetServer[]>> {
