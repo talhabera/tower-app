@@ -9,3 +9,4 @@ export { createClient } from "./http";
 export * from "./types";
 export type { ResourceHealth, ResourceState, ResourceStatus } from "./status";
 export { parseStatus } from "./status";
+export * from "./api";
