@@ -1,0 +1,25 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { SESSION_COOKIE } from "@/server/session";
+
+/**
+ * Giriş yapılmamış istek hiçbir Coolify çağrısı tetiklemez:
+ * kontrol sayfadan ÖNCE burada yapılır.
+ * Not: burada yalnızca çerezin varlığına bakılır; mühür doğrulaması
+ * sayfa tarafındaki requireSession() içinde yapılır (Edge'de kripto maliyeti yüksek).
+ */
+export function proxy(request: NextRequest) {
+  const isPublic =
+    request.nextUrl.pathname.startsWith("/api/auth") ||
+    request.nextUrl.pathname === "/giris-hatasi";
+
+  if (isPublic) return NextResponse.next();
+
+  if (!request.cookies.get(SESSION_COOKIE)) {
+    return NextResponse.redirect(new URL("/api/auth/login", request.url));
+  }
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+};
