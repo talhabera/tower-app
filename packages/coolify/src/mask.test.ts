@@ -60,4 +60,13 @@ describe("maskSecrets", () => {
       "DB_PASSWORD_FILE=***",
     );
   });
+
+  it("kısa Bearer token'ları da maskeler", () => {
+    expect(maskSecrets("authorization: bearer abcdef123")).toBe(
+      "authorization: bearer ***",
+    );
+    expect(maskSecrets("Authorization: BEARER abcdef123")).toBe(
+      "Authorization: BEARER ***",
+    );
+  });
 });
