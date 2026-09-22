@@ -1,69 +1,110 @@
-import Image from "next/image";
+import { Kart } from "@/components/kart";
+import { Sayac } from "@/components/sayac";
+import { TokenGecersizBandi } from "@/components/token-gecersiz-bandi";
+import { loadDashboard, riskCounts, UNREACHABLE_MESSAGE } from "@/server/dashboard";
+import { requireSession } from "@/server/session";
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+export const revalidate = 10;
+
+export default async function GenelDurum() {
+  await requireSession();
+  const data = await loadDashboard();
+
+  if (data.state === "unauthorized") return <TokenGecersizBandi />;
+
+  if (data.state === "unreachable" || !data.risks) {
+    return (
+      <main className="p-8">
+        <Kart baslik="Genel Durum" tazelik="ulasilamiyor">
+          <p className="text-sm text-neutral-700">{data.message ?? UNREACHABLE_MESSAGE}</p>
+        </Kart>
       </main>
-    </div>
+    );
+  }
+
+  const sayilar = riskCounts(data.risks, data.failures);
+  const f = data.failures;
+
+  const failedProjects = data.fleet?.projects.filter((p) => p.failure) ?? [];
+  const failedEnvironments =
+    data.fleet?.projects.flatMap((p) =>
+      p.environments
+        .filter((e) => e.failure)
+        .map((e) => ({ uuid: e.uuid, label: `${p.name} / ${e.name}`, failure: e.failure! })),
+    ) ?? [];
+  const sourceFailures: Array<{ key: string; text: string }> = [
+    ...(f.servers ? [{ key: "servers", text: `Sunucu listesi: okunamadı — ${f.servers}` }] : []),
+    ...(f.databases ? [{ key: "databases", text: `Veritabanı listesi: okunamadı — ${f.databases}` }] : []),
+    ...(f.backups.length > 0
+      ? [{ key: "backups", text: `${f.backups.length} veritabanının yedek programı okunamadı` }]
+      : []),
+    ...(f.applications.length > 0
+      ? [{ key: "applications", text: `${f.applications.length} uygulamanın detayı okunamadı` }]
+      : []),
+    ...(f.storages ? [{ key: "storages", text: `S3 hedefleri: okunamadı — ${f.storages}` }] : []),
+  ];
+  const hasFailures =
+    failedProjects.length > 0 || failedEnvironments.length > 0 || sourceFailures.length > 0;
+
+  return (
+    <main className="space-y-6 p-8">
+      <h1 className="text-xl font-semibold">Genel Durum</h1>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Sayac
+          baslik="Yedeksiz veritabanı"
+          sayi={sayilar.unbackedDatabases}
+          href="/yedekleme"
+          aciklama="Yedek programı tanımlı olmayan veya devre dışı bırakılmış veritabanları"
+        />
+        <Sayac
+          baslik="Healthcheck'siz uygulama"
+          sayi={sayilar.healthcheckDisabledApps}
+          href="/filo?filtre=healthcheck"
+          aciklama="Çöktüğünde çalışıyor görünecek uygulamalar"
+        />
+        <Sayac
+          baslik="Düşmüş kaynak"
+          sayi={sayilar.downResources}
+          href="/filo?filtre=dusmus"
+          aciklama="Çalışmayan uygulama, servis veya veritabanı"
+        />
+        <Sayac
+          baslik="Sorunlu sunucu"
+          sayi={sayilar.unreachableServers}
+          href="/filo"
+          aciklama="Erişilemeyen veya kullanılamaz durumdaki sunucular"
+        />
+      </div>
+
+      {hasFailures && (
+        <Kart baslik="Okunamayan kaynaklar" tazelik="ulasilamiyor">
+          <ul className="space-y-1 text-sm text-red-800">
+            {sourceFailures.map((s) => (
+              <li key={s.key}>{s.text}</li>
+            ))}
+            {failedProjects.map((p) => (
+              <li key={p.uuid}>
+                {p.name}: okunamadı — {p.failure}
+              </li>
+            ))}
+            {failedEnvironments.map((e) => (
+              <li key={e.uuid}>
+                {e.label}: okunamadı — {e.failure}
+              </li>
+            ))}
+          </ul>
+        </Kart>
+      )}
+
+      <Kart baslik="Son okuma" tazelik={data.stale ? "bayat" : "taze"} zaman={data.loadedAt}>
+        <p className="text-sm text-neutral-700">
+          {data.fleet?.projects.length ?? 0} proje ·{" "}
+          {data.fleet?.projects.flatMap((p) => p.environments).flatMap((e) => e.resources).length ?? 0}{" "}
+          kaynak · {data.fleet?.servers.length ?? 0} sunucu
+          {data.loadedAt ? ` · ${new Date(data.loadedAt).toLocaleString("tr-TR")}` : ""}
+        </p>
+      </Kart>
+    </main>
   );
 }

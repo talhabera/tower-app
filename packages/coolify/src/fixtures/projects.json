@@ -1,0 +1,62 @@
+[
+  {
+    "id": 2,
+    "uuid": "bp1d6kzipapf3olnkd06emta",
+    "name": "nexauth",
+    "description": ""
+  },
+  {
+    "id": 4,
+    "uuid": "ph9m4qbw6bxtgc8urxju3hhx",
+    "name": "clientb",
+    "description": ""
+  },
+  {
+    "id": 6,
+    "uuid": "b2lvd1rlrq5l6ioh0xhr1hz3",
+    "name": "docker-registry",
+    "description": ""
+  },
+  {
+    "id": 7,
+    "uuid": "dxw16ye455ownhuos6obzf2a",
+    "name": "nexstep-relay",
+    "description": ""
+  },
+  {
+    "id": 8,
+    "uuid": "g0zf69b8owzjiq8yeah9a25d",
+    "name": "Client A",
+    "description": ""
+  },
+  {
+    "id": 9,
+    "uuid": "zdcibz6lutvpmyw32mez6ild",
+    "name": "vpn",
+    "description": ""
+  },
+  {
+    "id": 10,
+    "uuid": "xfpm5db58wr9xkdww5j5vbmk",
+    "name": "nexstep-web",
+    "description": ""
+  },
+  {
+    "id": 12,
+    "uuid": "rwfxuaojjezszasqmodbemaa",
+    "name": "Internal",
+    "description": ""
+  },
+  {
+    "id": 15,
+    "uuid": "vv13uxtrrx53ut9h8b9l7fyo",
+    "name": "trader-trade",
+    "description": ""
+  },
+  {
+    "id": 16,
+    "uuid": "v63kln96m4ckopa695zpk2uj",
+    "name": "nexstep-analytics",
+    "description": ""
+  }
+]

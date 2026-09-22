@@ -1,0 +1,23 @@
+{
+  "name": "@tower/coolify",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint src scripts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "record:fixtures": "tsx --env-file=../../.env.local scripts/record-fixtures.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "eslint": "^9",
+    "tsx": "^4.23.15",
+    "typescript": "^5",
+    "typescript-eslint": "^8",
+    "vitest": "^3"
+  }
+}
