@@ -10,3 +10,6 @@ export * from "./types";
 export type { ResourceHealth, ResourceState, ResourceStatus } from "./status";
 export { parseStatus } from "./status";
 export * from "./api";
+export type { Fleet } from "./fleet";
+export { loadFleet } from "./fleet";
+export { mapPool } from "./pool";
