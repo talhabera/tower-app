@@ -8,33 +8,45 @@ export type CoolifyHttp = {
   get<T>(path: string): Promise<Result<T>>;
 };
 
-export function createClient(
-  config: CoolifyConfig,
-  fetchImpl: typeof fetch = fetch,
-): CoolifyHttp {
-  return {
-    async get<T>(path: string): Promise<Result<T>> {
-      const url = `${config.baseUrl}/api/v1${path}`;
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+/** Yalnızca `@tower/coolify/write` üzerinden erişilir; kök giriş bu tipi dışa aktarmaz. */
+export type CoolifyWriteHttp = CoolifyHttp & {
+  post<T>(path: string, body: unknown): Promise<Result<T>>;
+};
 
-      try {
-        return await request<T>(url, path, controller.signal);
-      } finally {
-        // Zaman aşımı gövde okumasını (response.json()) da kapsar.
-        clearTimeout(timer);
-      }
-    },
+type Method = "GET" | "POST";
+
+function requester(config: CoolifyConfig, fetchImpl: typeof fetch) {
+  return async function send<T>(method: Method, path: string, body?: unknown): Promise<Result<T>> {
+    const url = `${config.baseUrl}/api/v1${path}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      return await request<T>(method, url, path, body, controller.signal);
+    } finally {
+      // Zaman aşımı gövde okumasını (response.json()) da kapsar.
+      clearTimeout(timer);
+    }
   };
 
-  async function request<T>(url: string, path: string, signal: AbortSignal): Promise<Result<T>> {
+  async function request<T>(
+    method: Method,
+    url: string,
+    path: string,
+    body: unknown,
+    signal: AbortSignal,
+  ): Promise<Result<T>> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${config.token}`,
+      Accept: "application/json",
+    };
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+
     let response: Response;
     try {
       response = await fetchImpl(url, {
-        headers: {
-          Authorization: `Bearer ${config.token}`,
-          Accept: "application/json",
-        },
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
         signal,
       });
     } catch {
@@ -61,4 +73,20 @@ export function createClient(
       return err("malformed", maskSecrets(`Cevap JSON değil: ${path}`));
     }
   }
+}
+
+export function createClient(config: CoolifyConfig, fetchImpl: typeof fetch = fetch): CoolifyHttp {
+  const send = requester(config, fetchImpl);
+  return { get: (path) => send("GET", path) };
+}
+
+export function createWriteClient(
+  config: CoolifyConfig,
+  fetchImpl: typeof fetch = fetch,
+): CoolifyWriteHttp {
+  const send = requester(config, fetchImpl);
+  return {
+    get: (path) => send("GET", path),
+    post: (path, body) => send("POST", path, body),
+  };
 }

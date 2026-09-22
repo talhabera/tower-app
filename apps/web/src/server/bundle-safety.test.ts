@@ -6,7 +6,8 @@ import { describe, expect, it } from "vitest";
 const FORBIDDEN_NAMES = ["COOLIFY_TOKEN", "TOWER_OIDC_CLIENT_SECRET", "TOWER_SESSION_SECRET"];
 
 /** İstemci bileşeni bu modülleri içe aktaramaz (token/oturum sunucu tarafında kalır). */
-const FORBIDDEN_IMPORT = /(?:from\s+|import\s*\(\s*|import\s+)["'](@tower\/coolify|@\/server\/[^"']*|server-only)["']/g;
+const FORBIDDEN_IMPORT =
+  /(?:from\s+|import\s*\(\s*|import\s+)["'](@tower\/coolify(?:\/write)?|@tower\/db|@\/server\/[^"']*|server-only)["']/g;
 
 const USE_CLIENT = /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*["']use client["']/;
 
@@ -40,6 +41,7 @@ describe("istemci paketi güvenliği", () => {
       "// açıklama",
       '"use client";',
       'import { loadFleet } from "@tower/coolify";',
+      'import { createBackupSchedule } from "@tower/coolify/write";',
       'import { requireSession } from "@/server/session";',
       "const t = process.env.COOLIFY_TOKEN;",
     ].join("\n");
@@ -47,6 +49,7 @@ describe("istemci paketi güvenliği", () => {
     expect(clientViolations("fake.tsx", fake)).toEqual([
       "fake.tsx -> COOLIFY_TOKEN",
       "fake.tsx -> import @tower/coolify",
+      "fake.tsx -> import @tower/coolify/write",
       "fake.tsx -> import @/server/session",
     ]);
   });

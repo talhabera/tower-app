@@ -233,4 +233,15 @@ describe("createDashboardLoader", () => {
 
     expect(fetch).toHaveBeenCalledTimes(2);
   });
+
+  it("invalidate() TTL içindeki memo'yu boşaltır, sonraki çağrı ağa gider", async () => {
+    let now = 0;
+    const fetch = vi.fn(async () => okData);
+    const load = createDashboardLoader(fetch, 10_000, () => now);
+    await load();
+    now = 1_000;
+    load.invalidate();
+    await load();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
 });
