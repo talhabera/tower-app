@@ -7,6 +7,13 @@ function redirectLocation(response: ReturnType<typeof proxy>): string | null {
   return response.headers.get("location");
 }
 
+const ORIGINAL_TOWER_BASE_URL = process.env.TOWER_BASE_URL;
+
+afterEach(() => {
+  if (ORIGINAL_TOWER_BASE_URL === undefined) delete process.env.TOWER_BASE_URL;
+  else process.env.TOWER_BASE_URL = ORIGINAL_TOWER_BASE_URL;
+});
+
 describe("proxy", () => {
   it("oturum çerezi yoksa girişe yönlendirir (TOWER_BASE_URL yoksa localhost)", () => {
     delete process.env.TOWER_BASE_URL;
@@ -39,12 +46,6 @@ describe("proxy", () => {
 });
 
 describe("proxy TOWER_BASE_URL", () => {
-  const original = process.env.TOWER_BASE_URL;
-  afterEach(() => {
-    if (original === undefined) delete process.env.TOWER_BASE_URL;
-    else process.env.TOWER_BASE_URL = original;
-  });
-
   it("girişe yönlendirmeyi Host başlığından değil TOWER_BASE_URL'den kurar", () => {
     process.env.TOWER_BASE_URL = "https://tower.example.com/";
     const request = new NextRequest("http://10.0.0.5:3000/filo");

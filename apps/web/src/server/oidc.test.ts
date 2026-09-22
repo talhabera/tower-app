@@ -43,8 +43,10 @@ describe("sessionIdentity", () => {
     expect(sessionIdentity({ sub: 42 })).toBeNull();
   });
 
-  it("claim'lerden kimlik üretir", () => {
-    expect(sessionIdentity({ sub: "u1", email: "a@example.com", name: "A" })).toEqual({
+  it("claim'lerden kimlik üretir (email_verified: true iken)", () => {
+    expect(
+      sessionIdentity({ sub: "u1", email: "a@example.com", name: "A", email_verified: true }),
+    ).toEqual({
       sub: "u1",
       email: "a@example.com",
       name: "A",
@@ -56,6 +58,24 @@ describe("sessionIdentity", () => {
       sub: "u1",
       email: "",
       name: "",
+    });
+  });
+
+  it("email_verified claim'i eksikse e-postayı oturuma taşımaz", () => {
+    expect(sessionIdentity({ sub: "u1", email: "ops@example.com", name: "Ops" })).toEqual({
+      sub: "u1",
+      email: "",
+      name: "",
+    });
+  });
+
+  it("email_verified === true ise e-posta ve ad oturuma taşınır", () => {
+    expect(
+      sessionIdentity({ sub: "u1", email: "ops@example.com", name: "Ops", email_verified: true }),
+    ).toEqual({
+      sub: "u1",
+      email: "ops@example.com",
+      name: "Ops",
     });
   });
 });

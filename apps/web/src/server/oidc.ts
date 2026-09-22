@@ -28,13 +28,14 @@ export type SessionIdentity = { sub: string; email: string; name: string };
  * ID token claim'lerinden oturum kimliği üretir; giriş reddedilecekse null döner.
  * - `sub` boş/eksikse reddedilir.
  * - Giriş yetkisi NexAuth'taki uygulama grant'idir; burada allowlist yoktur.
- * - `email_verified === false` ise e-posta oturuma taşınmaz: yazıcı kontrolü
+ * - E-posta ve ad yalnızca `email_verified === true` ise oturuma taşınır;
+ *   claim eksikse veya `false` ise e-posta/ad boş kalır: yazıcı kontrolü
  *   (isWriter) boş e-postayı her zaman reddeder.
  */
 export function sessionIdentity(claims: Record<string, unknown>): SessionIdentity | null {
   const sub = typeof claims.sub === "string" ? claims.sub.trim() : "";
   if (!sub) return null;
-  const verified = claims.email_verified !== false;
+  const verified = claims.email_verified === true;
   const email = verified && typeof claims.email === "string" ? claims.email.trim() : "";
   const name = verified && typeof claims.name === "string" ? claims.name : "";
   return { sub, email, name };
