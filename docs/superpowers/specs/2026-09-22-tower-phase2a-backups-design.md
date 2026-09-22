@@ -7,9 +7,9 @@ Durum: onaylandı (tasarım), uygulama planı bekliyor
 ## Amaç
 
 Faz 1 sessiz riskleri görünür yaptı; en büyüğü 7/7 veritabanında yedek programı
-olmaması ve S3 hedefinin tanımsız olması. Faz 2A, Tower'a **ilk yazma yolunu**
-ekler ve bu boşluğu kapatır: S3 storage tanımlamak ve veritabanlarına yedek programı
-kurmak. Her yazma denetim kaydına (audit log) düşer.
+olmaması. S3 hedefi 2026-09-22'de Coolify'da elle tanımlandı (`nexstep-tower`,
+Hetzner fsn1, `is_usable=true`). Faz 2A, Tower'a **ilk yazma yolunu** ekler ve
+veritabanlarına bu S3'e giden yedek programı kurar. Her yazma denetim kaydına (audit log) düşer.
 
 Faz 2 iki bağımsız alt sisteme bölündü:
 - **2A (bu belge):** yazma altyapısı + yedekleme.
@@ -21,14 +21,16 @@ Faz 2 iki bağımsız alt sisteme bölündü:
 1. Faz 1.1'den iki auth düzeltmesi (yazma gelmeden önce auth sağlam olmalı).
 2. Yazıcı yetkisi: `TOWER_WRITER_EMAILS`.
 3. Tower'ın kendi Postgres'i ve denetim kaydı.
-4. S3 storage oluşturma + doğrulama.
+4. Preset'te hedef S3 seçimi (Coolify'daki kullanılabilir storage'lardan).
 5. Veritabanı başına "Yedeklemeyi aç" ve toplu "Korumasız N veritabanını koru".
 6. `/denetim` sayfası.
+7. Fixture redact düzeltmesi: `GET /s3-storages` `key` ve `secret`'ı düz metin döner;
+   `redact.ts` regex'i çıplak `key` anahtarını yakalamaz. Regex'e `^key$` eklenir.
 
 ## Kapsam dışı (Faz 2A)
 
 - Restart, deploy, stop, env değişikliği → 2A.2
-- S3 storage düzenleme/silme, yedek programı silme
+- S3 storage oluşturma/düzenleme/silme (Coolify UI'da yapılır), yedek programı silme
 - Yedekten geri yükleme (restore)
 - Uyarı/bildirim → Faz 4
 - Tower'ın kendisinin Coolify'a deploy edilmesi
@@ -44,6 +46,7 @@ Faz 2 iki bağımsız alt sisteme bölündü:
 | Yazma yetkisi | `TOWER_WRITER_EMAILS` allowlist | Boşsa kimse yazamaz (fail closed) |
 | Giriş yetkisi | NexAuth uygulama/özellik grant'i | `TOWER_ALLOWED_EMAILS` kaldırılır |
 | Yedek UX | Preset + toplu işlem, onay ekranı | 7 formu tek adıma indirir |
+| S3 oluşturma | Kapsam dışı | `nexstep-tower` Coolify'da elle kuruldu; YAGNI |
 | Mimari | Subpath export + `@tower/db` + tek `performWrite` | En az hareketli parça; denetim garantisi tek fonksiyonda |
 
 ## Mimari
@@ -66,8 +69,7 @@ packages/
   yazma metoduna erişemez.
 - HTTP istemcisine `post` ve `patch` eklenir; bunlar yalnızca `write` girişinden
   kullanılabilir (`createWriteClient`). Kök girişteki `CoolifyHttp` tipi `get`-only kalır.
-- Metodlar: `createS3Storage`, `validateS3Storage`, `createBackupSchedule`,
-  `updateBackupSchedule`. Hepsi `Result<T, CoolifyError>` döner, throw etmez.
+- Metodlar: `createBackupSchedule`, `updateBackupSchedule`. Hepsi `Result<T, CoolifyError>` döner, throw etmez.
 - Hata mesajları ve payload'lar mevcut `maskSecrets` / `redactJson` ile maskelenir.
 - Zaman aşımı 20 sn, yeniden deneme yok.
 
@@ -95,9 +97,9 @@ Tüm yazmaların tek geçidi. Sırası sabittir:
 audit_log
   id           uuid pk
   actor_email  text not null
-  action       text not null      -- 's3.create' | 's3.validate' | 'backup.create'
-                                  -- | 'backup.update' | 'backup.protect_all'
-  target       text               -- coolify uuid (veritabanı / s3 storage)
+  action       text not null      -- 'backup.create' | 'backup.update'
+                                  -- | 'backup.protect_all' | 'preset.update'
+  target       text               -- coolify uuid (veritabanı)
   payload      jsonb not null     -- sırlar maskelenmiş istek
   status       text not null      -- 'pending' | 'ok' | 'failed'
   error_kind   text               -- CoolifyErrorKind | 'forbidden' | 'db'
@@ -117,15 +119,16 @@ backup_preset   -- tek satır
   updated_at       timestamptz
 ```
 
-S3 secret key Tower veritabanında **hiçbir yerde** saklanmaz; doğrudan Coolify'a gider,
-denetim payload'ında maskelenir.
+Tower S3 kimlik bilgilerini hiç okumaz ve saklamaz; preset yalnızca storage uuid'sini tutar.
+`listS3Storages` zaten yalnızca uuid/name/bucket/endpoint/usable alanlarını kopyalar.
 
 ## Akışlar
 
 ### Yedeklemeyi aç (tek veritabanı)
 
 1. Yazıcı kontrolü (UI'da buton yazıcı değilse gizli; server action yine kontrol eder).
-2. Preset'i oku. `s3_storage_uuid` yoksa → `needs_s3`, UI S3 formuna yönlendirir.
+2. Preset'i oku. `s3_storage_uuid` yoksa veya o storage artık `usable` değilse →
+   `needs_s3`, UI preset düzenlemeye yönlendirir.
 3. `performWrite('backup.create', dbUuid, () => createBackupSchedule(dbUuid, preset))`.
 4. `revalidatePath('/yedekleme')`.
 
@@ -139,12 +142,13 @@ denetim payload'ında maskelenir.
 4. Sonuç: veritabanı başına tablo (ok / failed + kind / skipped).
    Ebeveyn satır yalnızca tümü ok veya skipped ise `ok`, aksi halde `failed`.
 
-### S3 storage oluştur
+### Preset düzenle
 
-1. Form: endpoint, bucket, region, access key, secret key.
-2. `s3.create` → ardından hemen `s3.validate` (iki ayrı denetim satırı).
-3. Doğrulama başarısızsa storage Coolify'da kalır, UI "doğrulanmadı" gösterir ve
-   preset hedefi olarak seçilemez.
+1. Form: sıklık (cron), saat dilimi, keep_local, keep_s3, hedef S3.
+2. Hedef S3 listesi canlı `listS3Storages`'tan gelir; yalnızca `usable=true` olanlar seçilebilir.
+3. Kayıt `preset.update` denetim satırı üretir (Coolify çağrısı yok; `performWrite`'ın
+   `fn`'i yalnızca db yazar).
+4. Mevcut programlar otomatik güncellenmez; preset yalnızca yeni programlara uygulanır.
 
 ## Hata yönetimi
 
@@ -167,15 +171,18 @@ denetim payload'ında maskelenir.
 
 ## Canlı API doğrulaması (uygulamanın ilk adımı)
 
-Upstream Coolify OpenAPI (v4.x) gerekli uçları içeriyor: `POST /s3-storages`,
-`POST /s3-storages/{uuid}/validate`, `POST|PATCH /databases/{uuid}/backups`,
+Canlı instance: Coolify **4.3.23**, token geçerli (2026-09-22). Upstream OpenAPI (v4.x)
+gerekli uçları içeriyor: `POST|PATCH /databases/{uuid}/backups`,
 `GET /databases/{uuid}/backups/{uuid}/executions`.
 
-2026-09-22'de canlı instance token'ı reddetti (`401 Unauthenticated`); Faz 1'den bekleyen
-token rotasyonu gerekli. Rotasyondan sonra:
-1. Canlı sürümde bu uçların varlığı doğrulanır.
-2. İstek/cevap fixture'ları kaydedilir (sırlar maskeli).
-3. Uçlardan biri yoksa uygulama durur ve plan yeniden yapılır.
+Not: `.env.local`'daki token `|` içerir; shell ile `source` edilirse boş okunur.
+Scriptler dosyayı kendileri parse etmelidir.
+
+Uygulamanın ilk adımı:
+1. `POST /databases/{uuid}/backups` istek gövdesinin 4.3.23'te kabul ettiği alanlar
+   (sıklık, saklama, `s3_storage_uuid`, `save_s3`) upstream şemadan doğrulanır.
+2. Cevap fixture'ı ilk gerçek oluşturmada kaydedilir (redact düzeltmesinden sonra).
+3. Uç beklenenden farklıysa uygulama durur ve plan yeniden yapılır.
 
 ## Test
 
@@ -194,7 +201,6 @@ token rotasyonu gerekli. Rotasyondan sonra:
 - Coolify'da Tower için yeni Postgres → `DATABASE_URL`. Toplu işlemle ilk korunan
   veritabanı bu olur.
 - Root'ta `.env.example`: `DATABASE_URL`, `TOWER_WRITER_EMAILS` ve Faz 1 değişkenleri.
-- Coolify token rotasyonu (Faz 1'den bekliyor).
 
 ## Bitti sayılır
 
