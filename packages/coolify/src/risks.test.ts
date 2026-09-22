@@ -96,6 +96,19 @@ describe("computeRisks", () => {
     expect(computeRisks({ fleet: f, databases: [], applications: [] }).downResources.count).toBe(0);
   });
 
+  it("running:unhealthy kaynağı düşmüş sayar", () => {
+    const f = fleet({
+      projects: [
+        project([
+          { uuid: "r1", name: "relay-web", kind: "application", status: parseStatus("running:unhealthy"), projectUuid: "p1", projectName: "nexstep-relay", environmentName: "production" },
+        ]),
+      ],
+    });
+    expect(computeRisks({ fleet: f, databases: [], applications: [] }).downResources.items).toEqual([
+      { uuid: "r1", name: "relay-web" },
+    ]);
+  });
+
   it("erişilemeyen veya kullanılamaz sunucuları sayar", () => {
     const f = fleet({
       servers: [

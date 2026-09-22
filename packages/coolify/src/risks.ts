@@ -31,8 +31,14 @@ export function computeRisks({ fleet, databases, applications }: RiskInput): Ris
   const down = fleet.projects
     .flatMap((p) => p.environments)
     .flatMap((e) => e.resources)
+    // Düşmüş: çalışmıyor (exited vb.) ya da çalışıyor ama healthcheck unhealthy diyor.
     // running:unknown healthcheck eksikliğidir, düşmüş değildir — ayrı sayaçta izlenir.
-    .filter((r) => r.status.state !== "running" && r.status.state !== "unknown")
+    // state "unknown" parse edilemeyen durumdur; düşmüş sayılmaz.
+    .filter(
+      (r) =>
+        (r.status.state !== "running" && r.status.state !== "unknown") ||
+        r.status.health === "unhealthy",
+    )
     .map((r) => ({ uuid: r.uuid, name: r.name }));
 
   const servers = fleet.servers
