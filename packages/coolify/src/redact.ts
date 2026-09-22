@@ -2,7 +2,7 @@ import { maskSecrets } from "./mask";
 
 const SECRET_KEY_PATTERN =
   /(token|secret|password|passwd|api_?key|private_?key|credential|webhook)/i;
-const SECRET_KEY_EXACT = new Set(["custom_labels", "custom_docker_run_options"]);
+const SECRET_KEY_EXACT = new Set(["key", "custom_labels", "custom_docker_run_options"]);
 const SECRET_KEY_PREFIXES = ["docker_compose", "dockerfile"];
 
 function isSecretKey(key: string): boolean {
@@ -16,7 +16,7 @@ function isSecretKey(key: string): boolean {
  * Parse edilmiş JSON değerini iki kuralla temizler:
  * 1) Anahtar adı gizli bilgi ima ediyorsa (token, secret, password, passwd,
  *    api_key, private_key, credential, webhook ya da docker_compose,
- *    dockerfile önekli anahtarlar, custom_labels, custom_docker_run_options),
+ *    dockerfile önekli anahtarlar, custom_labels, custom_docker_run_options, key),
  *    null olmayan değer bütünüyle "***" ile değiştirilir (içine inilmez).
  * 2) Kalan tüm string yapraklar maskSecrets'tan geçirilir.
  * Saf fonksiyondur; girdiyi değiştirmez, yeni bir değer döner.

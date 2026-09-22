@@ -52,4 +52,13 @@ describe("redactJson", () => {
     redactJson(input);
     expect(input).toEqual(snapshot);
   });
+
+  it("S3 cevabındaki çıplak `key` ve `secret` alanlarını maskeler", () => {
+    const input = [{ uuid: "u1", name: "nexstep-tower", key: "mykey123", secret: "mysecret" }];
+    expect(redactJson(input)).toEqual([{ uuid: "u1", name: "nexstep-tower", key: "***", secret: "***" }]);
+  });
+
+  it("`key` içeren ama `key` olmayan anahtarları maskelemez", () => {
+    expect(redactJson({ monkey: "x", keys_count: 3 })).toEqual({ monkey: "x", keys_count: 3 });
+  });
 });
