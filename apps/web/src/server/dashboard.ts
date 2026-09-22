@@ -190,11 +190,13 @@ const DASHBOARD_TTL_MS = 10_000;
  *   sayfalar token bandını göstermelidir.
  * Test edilebilirlik için saat dışarıdan verilebilir.
  */
+export type DashboardLoader = DashboardFetcher & { invalidate(): void };
+
 export function createDashboardLoader(
   fetch: DashboardFetcher,
   ttlMs: number = DASHBOARD_TTL_MS,
   clock: Clock = () => Date.now(),
-): DashboardFetcher {
+): DashboardLoader {
   let goodCache: { data: DashboardData; fetchedAt: number } | null = null;
   let memoCache: { data: DashboardData; fetchedAt: number } | null = null;
   let inflight: Promise<DashboardData> | null = null;
@@ -220,7 +222,7 @@ export function createDashboardLoader(
     return fresh;
   }
 
-  return function load(): Promise<DashboardData> {
+  function load(): Promise<DashboardData> {
     const now = clock();
     if (memoCache && now - memoCache.fetchedAt < ttlMs) {
       return Promise.resolve(memoCache.data);
@@ -229,7 +231,14 @@ export function createDashboardLoader(
       inflight = null;
     });
     return inflight;
+  }
+
+  /** Yazmadan sonra çağrılır: memo boşalır, bir sonraki okuma ağa gider (goodCache korunur). */
+  load.invalidate = () => {
+    memoCache = null;
   };
+
+  return load;
 }
 
-export const loadDashboard: DashboardFetcher = createDashboardLoader(fetchDashboardData);
+export const loadDashboard: DashboardLoader = createDashboardLoader(fetchDashboardData);
