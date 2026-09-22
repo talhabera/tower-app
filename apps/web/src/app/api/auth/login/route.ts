@@ -1,10 +1,17 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import * as client from "openid-client";
-import { callbackUrl, oidcConfig } from "@/server/oidc";
+import { appUrl, baseUrl, callbackUrl, oidcConfig } from "@/server/oidc";
 import { PKCE_COOKIE, STATE_COOKIE, sessionCookieOptions } from "@/server/session";
 
-export async function GET(request: NextRequest) {
-  const config = await oidcConfig();
+export async function GET() {
+  let config: client.Configuration;
+  try {
+    // Eksik env veya discovery hatası 500 değil, giriş hatası sayfası verir.
+    config = await oidcConfig();
+  } catch {
+    return NextResponse.redirect(appUrl("/giris-hatasi"));
+  }
+
   const codeVerifier = client.randomPKCECodeVerifier();
   const codeChallenge = await client.calculatePKCECodeChallenge(codeVerifier);
   const state = client.randomState();
@@ -18,7 +25,7 @@ export async function GET(request: NextRequest) {
   });
 
   const response = NextResponse.redirect(url.href);
-  const options = sessionCookieOptions(request.url, 600);
+  const options = sessionCookieOptions(baseUrl(), 600);
   response.cookies.set(PKCE_COOKIE, codeVerifier, options);
   response.cookies.set(STATE_COOKIE, state, options);
   return response;

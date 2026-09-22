@@ -30,4 +30,9 @@ describe("proxy", () => {
     const request = new NextRequest("https://tower.example.com/giris-hatasi");
     expect(redirectLocation(proxy(request))).toBeNull();
   });
+
+  it("/api/authX gibi benzer yollar herkese açık sayılmaz", () => {
+    const request = new NextRequest("https://tower.example.com/api/authX");
+    expect(redirectLocation(proxy(request))).toBe("https://tower.example.com/api/auth/login");
+  });
 });

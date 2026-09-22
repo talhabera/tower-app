@@ -31,9 +31,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </Link>
           <Link href="/filo">Filo</Link>
           <Link href="/yedekleme">Yedekleme</Link>
-          <Link href="/api/auth/logout" className="ml-auto text-neutral-500">
-            Çıkış
-          </Link>
+          <form action="/api/auth/logout" method="post" className="ml-auto">
+            <button type="submit" className="text-neutral-500 hover:text-neutral-900">
+              Çıkış
+            </button>
+          </form>
         </nav>
         {children}
       </body>

@@ -8,9 +8,9 @@ import { SESSION_COOKIE } from "@/server/session";
  * sayfa tarafındaki requireSession() içinde yapılır (Edge'de kripto maliyeti yüksek).
  */
 export function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
   const isPublic =
-    request.nextUrl.pathname.startsWith("/api/auth") ||
-    request.nextUrl.pathname === "/giris-hatasi";
+    pathname === "/api/auth" || pathname.startsWith("/api/auth/") || pathname === "/giris-hatasi";
 
   if (isPublic) return NextResponse.next();
 

@@ -15,9 +15,55 @@ export async function oidcConfig(): Promise<client.Configuration> {
   return cached;
 }
 
+/**
+ * Uygulamanın dış adresi. Yönlendirmeler ve çerez `secure` bayrağı bundan
+ * türetilir — gelen isteğin Host başlığından (request.url) DEĞİL.
+ */
+export function baseUrl(): string {
+  return (process.env.TOWER_BASE_URL ?? "http://localhost:3000").replace(/\/+$/, "");
+}
+
+/** `path`'i TOWER_BASE_URL üzerine kurar (ör. "/giris-hatasi?durum=cikis"). */
+export function appUrl(path: string): URL {
+  return new URL(path, `${baseUrl()}/`);
+}
+
 export function callbackUrl(): string {
-  const base = process.env.TOWER_BASE_URL ?? "http://localhost:3000";
-  return `${base}/api/auth/callback`;
+  return `${baseUrl()}/api/auth/callback`;
+}
+
+export type SessionIdentity = { sub: string; email: string; name: string };
+
+/** Virgülle ayrılmış e-posta listesi; boş/tanımsızsa null (= tüm NexAuth hesapları). */
+export function parseAllowedEmails(raw: string | undefined): Set<string> | null {
+  const list = (raw ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return list.length > 0 ? new Set(list) : null;
+}
+
+/**
+ * ID token claim'lerinden oturum kimliği üretir; giriş reddedilecekse null döner.
+ * - `sub` boş/eksikse reddedilir.
+ * - TOWER_ALLOWED_EMAILS tanımlıysa yalnızca listedeki (ve doğrulanmamış
+ *   işaretlenmemiş) e-postalar girebilir; tanımsızsa tüm NexAuth hesapları girer.
+ */
+export function sessionIdentity(
+  claims: Record<string, unknown>,
+  allowedEmailsRaw: string | undefined,
+): SessionIdentity | null {
+  const sub = typeof claims.sub === "string" ? claims.sub.trim() : "";
+  if (!sub) return null;
+  const email = typeof claims.email === "string" ? claims.email.trim() : "";
+  const name = typeof claims.name === "string" ? claims.name : "";
+
+  const allowed = parseAllowedEmails(allowedEmailsRaw);
+  if (allowed) {
+    if (!email || !allowed.has(email.toLowerCase())) return null;
+    if (claims.email_verified === false) return null;
+  }
+  return { sub, email, name };
 }
 
 /**
