@@ -13,3 +13,5 @@ export * from "./api";
 export type { Fleet } from "./fleet";
 export { loadFleet } from "./fleet";
 export { mapPool } from "./pool";
+export type { RiskBucket, RiskInput, RiskItem, RiskReport } from "./risks";
+export { computeRisks } from "./risks";
