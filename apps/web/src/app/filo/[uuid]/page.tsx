@@ -11,6 +11,7 @@ import {
 } from "@tower/coolify";
 import { DurumRozeti } from "@/components/durum-rozeti";
 import { Kart } from "@/components/kart";
+import { TokenGecersizBandi } from "@/components/token-gecersiz-bandi";
 import { getCoolify } from "@/server/coolify";
 import { requireSession } from "@/server/session";
 
@@ -59,9 +60,19 @@ export default async function KaynakDetay({ params }: { params: Promise<{ uuid: 
   const { uuid } = await params;
 
   const http = getCoolify();
-  if (!http.ok) notFound();
+  if (!http.ok) {
+    return (
+      <main className="p-8">
+        <Kart baslik="Kaynak" tazelik="ulasilamiyor">
+          <p className="text-sm">{http.error.message}</p>
+        </Kart>
+      </main>
+    );
+  }
 
   const app = await getApplication(http.value, uuid);
+  if (!app.ok && app.error.kind === "unauthorized") return <TokenGecersizBandi />;
+  if (!app.ok && app.error.kind === "not_found") notFound();
   if (!app.ok) {
     return (
       <main className="p-8">
@@ -178,7 +189,7 @@ export default async function KaynakDetay({ params }: { params: Promise<{ uuid: 
         {(items) => (
           <ul className="flex flex-wrap gap-2 text-sm">
             {items.map((e) => (
-              <li key={e.key} className="rounded border border-neutral-200 px-2 py-1 font-mono text-xs">
+              <li key={`${e.key}-${e.isPreview ? "preview" : "main"}`} className="rounded border border-neutral-200 px-2 py-1 font-mono text-xs">
                 {e.key}
                 {e.isBuildTime ? " · build" : ""}
                 {e.isPreview ? " · preview" : ""}
