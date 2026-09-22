@@ -98,7 +98,7 @@ export function createStore(url: string): TowerStore {
 
     async getBackupPreset() {
       const [row] = await db.select().from(backupPreset).where(eq(backupPreset.id, PRESET_ID));
-      if (!row) return DEFAULT_PRESET;
+      if (!row) return { ...DEFAULT_PRESET };
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id: _id, ...preset } = row;
       return preset;

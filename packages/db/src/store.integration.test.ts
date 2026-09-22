@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createStore, DEFAULT_PRESET, runMigrations, type TowerStore } from "./index";
+import { createStore, DEFAULT_PRESET, type TowerStore } from "./index";
+import { runMigrations } from "./migrate";
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url) {
