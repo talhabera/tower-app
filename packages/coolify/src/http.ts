@@ -11,9 +11,10 @@ export type CoolifyHttp = {
 /** Yalnızca `@tower/coolify/write` üzerinden erişilir; kök giriş bu tipi dışa aktarmaz. */
 export type CoolifyWriteHttp = CoolifyHttp & {
   post<T>(path: string, body: unknown): Promise<Result<T>>;
+  patch<T>(path: string, body: unknown): Promise<Result<T>>;
 };
 
-type Method = "GET" | "POST";
+type Method = "GET" | "POST" | "PATCH";
 
 function requester(config: CoolifyConfig, fetchImpl: typeof fetch) {
   return async function send<T>(method: Method, path: string, body?: unknown): Promise<Result<T>> {
@@ -88,5 +89,6 @@ export function createWriteClient(
   return {
     get: (path) => send("GET", path),
     post: (path, body) => send("POST", path, body),
+    patch: (path, body) => send("PATCH", path, body),
   };
 }

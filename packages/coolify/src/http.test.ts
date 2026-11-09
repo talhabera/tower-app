@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { readConfig } from "./config";
-import { createClient } from "./http";
+import { createClient, createWriteClient } from "./http";
 
 const config = { baseUrl: "https://panel.example.app", token: "t0ken" };
 
@@ -117,5 +117,28 @@ describe("createClient.get", () => {
       expect(errorStr).toContain("password=***");
       expect(errorStr).not.toContain("hunter2");
     }
+  });
+});
+
+describe("createWriteClient.patch", () => {
+  it("PATCH metoduyla JSON gövde gönderir", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ uuid: "e-1" }, 201));
+    const client = createWriteClient(config, fetchImpl as unknown as typeof fetch);
+
+    const r = await client.patch("/applications/app-1/envs", { key: "A", value: "b", is_preview: false });
+
+    expect(r).toEqual({ ok: true, value: { uuid: "e-1" } });
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://panel.example.app/api/v1/applications/app-1/envs");
+    expect(init.method).toBe("PATCH");
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer t0ken");
+    expect(JSON.parse(init.body as string)).toEqual({ key: "A", value: "b", is_preview: false });
+  });
+
+  it("okuma istemcisinde patch yoktur", () => {
+    const client = createClient(config, vi.fn() as unknown as typeof fetch);
+    expect("patch" in client).toBe(false);
+    expect("post" in client).toBe(false);
   });
 });
