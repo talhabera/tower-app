@@ -4,6 +4,7 @@ import servers from "./fixtures/servers.json";
 import databases from "./fixtures/databases.json";
 import projects from "./fixtures/projects.json";
 import applicationDetail from "./fixtures/application-detail.json";
+import deploymentDetail from "./fixtures/deployment-detail.json";
 import {
   getEnvironment,
   listServers,
@@ -19,6 +20,7 @@ import {
   listApplicationScheduledTasks,
   listApplicationDeployments,
   getApplicationLogs,
+  getDeployment,
 } from "./api";
 import type { CoolifyHttp } from "./http";
 import { ok } from "./result";
@@ -357,6 +359,89 @@ describe("listApplicationDeployments", () => {
   });
 });
 
+describe("getDeployment", () => {
+  // Fixture elle yazıldı, tüm değerler sahte. `logs`, `configuration_snapshot`
+  // ve `configuration_diff` HASSAS — dönüş nesnesine asla kopyalanmamalı.
+  function trackedHttp(payload: unknown): { http: CoolifyHttp; calls: string[] } {
+    const calls: string[] = [];
+    const http: CoolifyHttp = {
+      get: async <T>(path: string) => {
+        calls.push(path);
+        return ok(payload as T);
+      },
+    };
+    return { http, calls };
+  }
+
+  it("fixture'ı yalnızca güvenli alanlarla eşler", async () => {
+    const { http, calls } = trackedHttp(deploymentDetail);
+    const r = await getDeployment(http, "fakedeploy0001abcd");
+    expect(calls).toEqual(["/deployments/fakedeploy0001abcd"]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value).toEqual({
+      uuid: "fakedeploy0001abcd",
+      applicationName: "fake-app",
+      status: "finished",
+      createdAt: "2026-01-01T10:00:00.000000Z",
+      updatedAt: "2026-01-01T10:04:30.000000Z",
+      restartOnly: true,
+    });
+  });
+
+  it("logs, configuration_snapshot ve configuration_diff paket sınırını geçmez", async () => {
+    const r = await getDeployment(stubHttp(deploymentDetail), "fakedeploy0001abcd");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const out = JSON.stringify(r.value);
+    for (const leak of [
+      deploymentDetail.logs,
+      deploymentDetail.configuration_snapshot,
+      deploymentDetail.configuration_diff,
+      "sk-fake-DO-NOT-LEAK-123",
+      "fake-snapshot-secret-456",
+      "fake-diff-old-789",
+      "fake-diff-new-789",
+    ]) {
+      expect(out).not.toContain(leak);
+    }
+    expect(Object.keys(r.value)).not.toContain("logs");
+  });
+
+  it("restart_only boolean değilse false döner", async () => {
+    const r = await getDeployment(
+      stubHttp({ deployment_uuid: "d1", status: "queued", restart_only: "yes" }),
+      "d1",
+    );
+    expect(r.ok && r.value.restartOnly).toBe(false);
+  });
+
+  it("geçersiz uuid '../x' için ağa hiç gitmez", async () => {
+    const { http, calls } = trackedHttp(deploymentDetail);
+    const r = await getDeployment(http, "../x");
+    expect(r.ok).toBe(false);
+    expect(calls.length).toBe(0);
+  });
+
+  for (const field of ["deployment_uuid", "status"] as const) {
+    it(`${field} eksikse malformed döner`, async () => {
+      const body: Record<string, unknown> = { ...deploymentDetail };
+      delete body[field];
+      const r = await getDeployment(stubHttp(body), "fakedeploy0001abcd");
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.kind).toBe("malformed");
+    });
+  }
+
+  for (const body of [null, 42, "metin", [1, 2]]) {
+    it(`${JSON.stringify(body)} gövdesi için malformed döner`, async () => {
+      const r = await getDeployment(stubHttp(body), "fakedeploy0001abcd");
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.kind).toBe("malformed");
+    });
+  }
+});
+
 describe("getApplicationLogs", () => {
   it("log satırlarındaki gizli bilgileri maskeler", async () => {
     const r = await getApplicationLogs(
@@ -399,6 +484,7 @@ describe("uuid yol/sorgu enjeksiyonu koruması", () => {
     ["listApplicationScheduledTasks", (http, uuid) => listApplicationScheduledTasks(http, uuid)],
     ["listApplicationDeployments", (http, uuid) => listApplicationDeployments(http, uuid)],
     ["getApplicationLogs", (http, uuid) => getApplicationLogs(http, uuid)],
+    ["getDeployment", (http, uuid) => getDeployment(http, uuid)],
   ];
 
   for (const [name, call] of CALLS) {

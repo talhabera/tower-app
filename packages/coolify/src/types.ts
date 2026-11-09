@@ -126,3 +126,16 @@ export type DeploymentSummary = {
   status: string;
   createdAt: string;
 };
+
+/**
+ * Tek bir dağıtımın güvenli alanları. Coolify `status` değerleri: `queued`,
+ * `in_progress`, `finished`, `failed`, `cancelled-by-user`.
+ */
+export type DeploymentDetail = {
+  uuid: string;
+  applicationName: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  restartOnly: boolean;
+};

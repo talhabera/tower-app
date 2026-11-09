@@ -9,6 +9,7 @@ import {
   type ApplicationStorage,
   type DatabaseBackup,
   type DatabaseSummary,
+  type DeploymentDetail,
   type DeploymentSummary,
   type EnvKey,
   type FleetEnvironment,
@@ -313,6 +314,39 @@ export async function listApplicationDeployments(
     }))
     .slice(0, limit);
   return ok(list);
+}
+
+/**
+ * Tek bir dağıtımın durumu. Yalnızca güvenli alanlar kopyalanır: yanıt `logs`
+ * (HASSAS — build çıktısında sır olabilir), `configuration_snapshot` ve
+ * `configuration_diff` (ortam değişkeni değerleri taşıyabilir) alanlarını da
+ * içerir; bunlar bilerek okunmaz ve paket sınırını asla geçmez.
+ */
+export async function getDeployment(
+  http: CoolifyHttp,
+  uuid: string,
+): Promise<Result<DeploymentDetail>> {
+  const path = seg(uuid);
+  if (!path.ok) return path;
+  const r = await http.get<unknown>(`/deployments/${path.value}`);
+  if (!r.ok) return r;
+  if (!isObject(r.value)) return err("malformed", "Dağıtım cevabı nesne değil");
+  const d = r.value;
+
+  const deploymentUuid = str(d.deployment_uuid);
+  const status = str(d.status);
+  if (!deploymentUuid || !status) {
+    return err("malformed", "Dağıtım cevabında deployment_uuid veya status eksik");
+  }
+
+  return ok({
+    uuid: deploymentUuid,
+    applicationName: str(d.application_name),
+    status,
+    createdAt: str(d.created_at),
+    updatedAt: str(d.updated_at),
+    restartOnly: bool(d.restart_only),
+  });
 }
 
 /**
